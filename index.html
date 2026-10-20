@@ -1,0 +1,2954 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>たかの冒険</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0a0a0f;
+  color: #e8e0d0;
+  font-family: 'Hiragino Kaku Gothic ProN', 'メイリオ', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#bg-canvas {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0; pointer-events: none;
+}
+
+#app {
+  position: relative; z-index: 1;
+  width: 100%; max-width: 640px;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+}
+
+/* ===== タイトル ===== */
+#title-screen {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 100vh; padding: 40px 20px; text-align: center;
+}
+.title-main {
+  font-size: 3rem; font-weight: bold;
+  letter-spacing: 0.3em; color: #f0c060;
+  text-shadow: 0 0 30px rgba(240,192,96,0.6);
+  margin-bottom: 10px;
+  animation: titleGlow 3s ease-in-out infinite;
+}
+.title-sub { font-size: 0.85rem; color: #888; letter-spacing: 0.2em; margin-bottom: 8px; }
+.title-desc { font-size: 0.75rem; color: #555; margin-bottom: 50px; line-height: 1.8; }
+@keyframes titleGlow {
+  0%,100% { text-shadow: 0 0 20px rgba(240,192,96,0.4); }
+  50%      { text-shadow: 0 0 50px rgba(240,192,96,0.9); }
+}
+.title-btn {
+  display: block; width: 220px; padding: 14px 0; margin: 8px auto;
+  border: 1px solid #f0c060; background: transparent;
+  color: #f0c060; font-size: 1rem; letter-spacing: 0.15em;
+  cursor: pointer; transition: all 0.3s; font-family: inherit;
+}
+.title-btn:hover { background: rgba(240,192,96,0.15); box-shadow: 0 0 20px rgba(240,192,96,0.3); }
+.title-btn:disabled { border-color: #333; color: #444; cursor: default; }
+.title-endings { margin-top: 32px; font-size: 0.7rem; color: #444; }
+
+/* ===== ゲーム画面 ===== */
+#game-screen { display: none; flex-direction: column; min-height: 100vh; }
+
+#status-bar {
+  padding: 10px 16px;
+  background: rgba(0,0,0,0.85);
+  border-bottom: 1px solid #1a1a1a;
+  display: flex; gap: 8px;
+  position: sticky; top: 0; z-index: 10;
+}
+.stat-item { display: flex; flex-direction: column; flex: 1; min-width: 55px; }
+.stat-label { font-size: 0.58rem; color: #777; margin-bottom: 3px; letter-spacing: 0.05em; }
+.stat-bar-wrap { height: 5px; background: #1a1a1a; border-radius: 3px; overflow: hidden; }
+.stat-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+.stat-num { font-size: 0.6rem; color: #666; text-align: right; margin-top: 2px; }
+.stat-yuuki    .stat-bar-fill { background: linear-gradient(90deg,#c03050,#e05070); }
+.stat-okane    .stat-bar-fill { background: linear-gradient(90deg,#308040,#50b060); }
+.stat-kenkou   .stat-bar-fill { background: linear-gradient(90deg,#305090,#5090d0); }
+.stat-jinmyaku .stat-bar-fill { background: linear-gradient(90deg,#703090,#b050d0); }
+
+/* ===== シーンビジュアルエリア ===== */
+#scene-visual {
+  position: relative; height: 220px;
+  overflow: hidden; flex-shrink: 0;
+  display: flex; align-items: flex-end;
+}
+#scene-bg {
+  position: absolute; inset: 0;
+  transition: background 0.8s ease;
+  background: linear-gradient(180deg,#0a0a12,#12121e);
+}
+#scene-bg::after {
+  content:''; position:absolute; inset:0;
+  background: linear-gradient(180deg,transparent 40%,rgba(0,0,0,0.7) 100%);
+}
+/* キャラクタースプライト（本物の画像用）*/
+#scene-sprite {
+  position: absolute; bottom: 0; left: 50%;
+  transform: translateX(-50%);
+  max-height: 210px; max-width: 280px;
+  object-fit: contain;
+  display: none; z-index: 2;
+  filter: drop-shadow(0 0 20px rgba(0,0,0,0.8));
+  transition: opacity 0.3s ease;
+}
+/* シチュエーションprop画像モード */
+#scene-sprite.prop-mode {
+  bottom: auto; top: 50%;
+  transform: translate(-50%, -50%);
+  max-height: 190px; max-width: 270px;
+  opacity: 0.88;
+  filter: drop-shadow(0 4px 20px rgba(0,0,0,0.7));
+}
+/* ロケーションラベル */
+#scene-location {
+  position: relative; z-index: 3;
+  width: 100%; padding: 8px 14px;
+  display: flex; justify-content: space-between;
+  align-items: flex-end;
+}
+#scene-num-label { font-size: 0.62rem; color: rgba(255,255,255,0.3); letter-spacing: 0.1em; }
+#scene-loc-text  { font-size: 0.7rem; color: rgba(255,255,255,0.5); letter-spacing: 0.15em; }
+
+/* ===== ダイアログエリア ===== */
+#dialog-area {
+  display: flex; align-items: flex-start;
+  padding: 14px 16px 8px;
+  gap: 0; cursor: pointer;
+  flex: 1;
+}
+
+/* ポートレイト */
+#portrait-wrap {
+  display: none; flex-direction: column;
+  align-items: center; flex-shrink: 0;
+  width: 64px; gap: 4px;
+}
+#portrait-circle {
+  width: 58px; height: 58px; border-radius: 50%;
+  overflow: hidden; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid rgba(255,255,255,0.15);
+  flex-shrink: 0;
+  transition: box-shadow 0.4s ease, background 0.4s ease;
+}
+#portrait-img-real {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; display: none;
+}
+#portrait-char-text {
+  font-size: 1.3rem; font-weight: bold;
+  color: rgba(255,255,255,0.9);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+  display: flex;
+}
+#portrait-name-small {
+  font-size: 0.55rem; color: rgba(255,255,255,0.45);
+  text-align: center; letter-spacing: 0.05em;
+  max-width: 60px; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis;
+}
+
+/* テキストボックス */
+#text-box {
+  flex: 1; padding: 0 4px 0 14px;
+  font-size: 0.93rem; line-height: 1.95;
+  transition: padding-left 0.2s;
+}
+#speaker-name {
+  font-size: 0.75rem; color: #f0c060;
+  margin-bottom: 6px; letter-spacing: 0.1em; min-height: 18px;
+}
+#text-content { color: #d8d0c0; }
+#text-cursor {
+  display: inline-block; width: 2px; height: 1em;
+  background: #f0c060; margin-left: 2px;
+  vertical-align: middle; animation: blink 0.8s step-end infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+#tap-hint {
+  text-align: right; font-size: 0.65rem; color: #444;
+  padding: 4px 20px 8px; animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:1} }
+
+#choices-area {
+  padding: 10px 16px 24px;
+  display: none; flex-direction: column; gap: 9px;
+}
+.choice-btn {
+  padding: 13px 16px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid #2a2a2a; color: #d8d0c0;
+  font-size: 0.88rem; line-height: 1.5;
+  cursor: pointer; transition: all 0.2s;
+  text-align: left; font-family: inherit; position: relative;
+}
+.choice-btn:hover {
+  background: rgba(240,192,96,0.08);
+  border-color: rgba(240,192,96,0.5);
+  padding-left: 26px;
+}
+.choice-btn:hover::before {
+  content: '▶'; position: absolute; left: 10px;
+  color: #f0c060; font-size: 0.65rem; top: 50%; transform: translateY(-50%);
+}
+
+/* エフェクト */
+.effect-popup {
+  position: fixed; font-size: 0.82rem; font-weight: bold;
+  pointer-events: none; z-index: 200;
+  animation: effectFloat 1.5s forwards;
+  text-shadow: 0 0 8px currentColor;
+}
+@keyframes effectFloat {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-70px) scale(0.8); }
+}
+
+/* ===== エンディング ===== */
+#ending-screen {
+  display: none; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 100vh; padding: 40px 24px; text-align: center;
+}
+.ending-badge {
+  font-size: 0.65rem; letter-spacing: 0.4em; color: #666;
+  margin-bottom: 20px; border: 1px solid #333;
+  padding: 4px 16px; display: inline-block;
+}
+.ending-title {
+  font-size: 1.5rem; font-weight: bold;
+  margin-bottom: 10px; line-height: 1.5; white-space: pre-line;
+}
+.ending-subtitle { font-size: 0.8rem; color: #777; margin-bottom: 28px; }
+.ending-divider { width: 60px; height: 1px; background: #333; margin: 0 auto 28px; }
+.ending-text {
+  font-size: 0.88rem; line-height: 2.1; color: #bbb;
+  max-width: 480px; margin: 0 auto 36px; white-space: pre-line;
+}
+.ending-stats {
+  display: flex; gap: 12px; margin-bottom: 40px;
+  justify-content: center; flex-wrap: wrap;
+}
+.ending-stat {
+  text-align: center; padding: 10px 14px;
+  border: 1px solid #222; min-width: 70px;
+}
+.ending-stat-label { font-size: 0.62rem; color: #666; margin-bottom: 4px; }
+.ending-stat-val   { font-size: 1.4rem; font-weight: bold; color: #f0c060; }
+.ending-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.ending-btn {
+  padding: 12px 28px; border: 1px solid #444;
+  background: transparent; color: #aaa;
+  font-size: 0.88rem; letter-spacing: 0.1em;
+  cursor: pointer; transition: all 0.25s; font-family: inherit;
+}
+.ending-btn:hover { border-color: #f0c060; color: #f0c060; }
+.ending-btn.primary { border-color: #f0c060; color: #f0c060; }
+.ending-btn.primary:hover { background: rgba(240,192,96,0.12); }
+
+/* ===== セーブ / チャプター / スキップ ===== */
+#game-action-bar {
+  display:flex; justify-content:flex-end; gap:8px;
+  padding:2px 16px 10px;
+}
+#skip-btn {
+  padding:5px 15px;
+  background:rgba(8,8,18,0.5);border:1px solid rgba(200,185,140,0.3);
+  color:#b8a878;font-size:0.7rem;letter-spacing:0.15em;
+  cursor:pointer;font-family:inherit;transition:all 0.2s;
+}
+#skip-btn:hover{border-color:rgba(240,192,96,0.7);color:#f0c060;}
+#skip-btn.active{border-color:#f0c060;color:#f0c060;background:rgba(240,192,96,0.12);}
+#btn-save-game {
+  padding:5px 14px;
+  background:rgba(255,255,255,0.04);border:1px solid rgba(200,185,140,0.3);
+  color:#a89868;font-size:0.62rem;letter-spacing:0.12em;
+  cursor:pointer;font-family:inherit;transition:all 0.2s;
+}
+#btn-save-game:hover{border-color:rgba(240,192,96,0.6);color:#f0c060;background:rgba(240,192,96,0.08);}
+.modal-ov {
+  display:none;position:fixed;inset:0;z-index:300;
+  background:rgba(0,0,0,0.9);padding:16px;
+  align-items:center;justify-content:center;
+}
+.modal-ov.open{display:flex;}
+.modal-box {
+  background:#0b0b14;border:1px solid #1e1e2e;
+  width:100%;max-width:360px;
+  max-height:82vh;display:flex;flex-direction:column;overflow:hidden;
+}
+.modal-head {
+  padding:12px 16px;border-bottom:1px solid #16162a;
+  display:flex;align-items:center;gap:12px;
+}
+.modal-head-title{font-size:0.78rem;color:#f0c060;letter-spacing:0.2em;flex:1;}
+.modal-x{background:none;border:none;color:#555;font-size:1rem;cursor:pointer;padding:0 4px;line-height:1;}
+.modal-x:hover{color:#f0c060;}
+.modal-body{padding:12px 14px;overflow-y:auto;flex:1;}
+.modal-empty{text-align:center;padding:28px 0;font-size:0.76rem;color:#444;}
+.save-slot{
+  padding:11px 13px;border:1px solid #16162a;margin-bottom:8px;
+  transition:all 0.2s;display:flex;align-items:center;gap:10px;
+}
+.slot-info{flex:1;min-width:0;}
+.slot-name{font-size:0.72rem;color:#888;margin-bottom:3px;}
+.slot-detail{font-size:0.63rem;color:#3a3a4a;line-height:1.6;}
+.slot-detail.has{color:#666;}
+.slot-btns{display:flex;gap:5px;flex-shrink:0;}
+.slot-btn{
+  padding:4px 9px;background:none;border:1px solid #222230;
+  color:#666;font-size:0.6rem;cursor:pointer;font-family:inherit;transition:all 0.2s;
+}
+.slot-btn:hover{border-color:#f0c060;color:#f0c060;}
+.slot-btn:disabled{color:#2a2a3a;border-color:#16162a;cursor:default;}
+.slot-btn.del:hover{border-color:#cc4444;color:#cc4444;}
+.chapter-item{
+  padding:10px 13px;border:1px solid #16162a;margin-bottom:6px;
+  cursor:pointer;transition:all 0.2s;display:flex;align-items:flex-start;gap:11px;
+}
+.chapter-item:hover{border-color:rgba(240,192,96,0.3);background:rgba(240,192,96,0.03);}
+.ch-num{font-size:0.6rem;color:#555;padding-top:2px;min-width:42px;}
+.ch-body{flex:1;min-width:0;}
+.ch-title{font-size:0.8rem;color:#ccc;margin-bottom:3px;}
+.ch-stats{font-size:0.6rem;color:#454555;}
+
+/* ===== トロフィー ===== */
+#trophy-section{ margin-top:28px; width:100%; max-width:300px; }
+.trophy-head{ font-size:0.52rem; color:#303040; letter-spacing:0.4em; text-align:center; margin-bottom:10px; }
+#trophy-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
+.trophy-badge{ border:1px solid #131320; padding:7px 3px 5px; text-align:center; transition:all 0.25s; }
+.trophy-badge.locked{ opacity:0.15; }
+.trophy-badge.unlocked{ cursor:pointer; border-color:rgba(255,255,255,0.06); }
+.trophy-badge.unlocked:hover{ background:rgba(255,255,255,0.04); transform:translateY(-2px); box-shadow:0 4px 14px rgba(0,0,0,0.5); }
+.trophy-badge.trophy-new{ animation:trophyPulse 1.8s ease-in-out 4; }
+@keyframes trophyPulse{ 0%,100%{opacity:1} 50%{opacity:0.5} }
+.t-bar{ height:2px; margin:0 6px 5px; border-radius:1px; background:#1a1a2a; }
+.t-kanji{ font-size:1.1rem; margin-bottom:3px; line-height:1; }
+.t-name{ font-size:0.4rem; color:#4a4a5a; line-height:1.4; overflow:hidden; }
+.trophy-badge.unlocked .t-name{ color:#666; }
+#trophy-tip{ min-height:28px; margin-top:8px; text-align:center; font-size:0.62rem; color:#777; padding:0 8px; line-height:1.7; }
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div id="app">
+
+  <div id="title-screen">
+    <div class="title-main">たかの冒険</div>
+    <div class="title-sub">〜 俺の人生、俺が選ぶ 〜</div>
+    <div class="title-desc">
+      これは実話をもとにしたフィクションです。<br>
+      選択肢があなたの結末を変える。
+    </div>
+    <button class="title-btn primary" id="btn-new">はじめから</button>
+    <button class="title-btn" id="btn-continue">つづきから</button>
+    <button class="title-btn" id="btn-chapter">チャプター選択</button>
+    <button class="title-btn" id="btn-load">データロード</button>
+    <div class="title-endings" id="title-endings-count"></div>
+    <div id="trophy-section">
+      <div class="trophy-head">T R O P H I E S</div>
+      <div id="trophy-grid"></div>
+      <div id="trophy-tip"></div>
+    </div>
+  </div>
+
+  <div id="game-screen">
+    <div id="status-bar">
+      <div class="stat-item stat-yuuki">
+        <div class="stat-label">勇気</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-fill" id="bar-yuuki" style="width:50%"></div></div>
+        <div class="stat-num" id="num-yuuki">50</div>
+      </div>
+      <div class="stat-item stat-okane">
+        <div class="stat-label">お金</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-fill" id="bar-okane" style="width:50%"></div></div>
+        <div class="stat-num" id="num-okane">50</div>
+      </div>
+      <div class="stat-item stat-kenkou">
+        <div class="stat-label">健康</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-fill" id="bar-kenkou" style="width:50%"></div></div>
+        <div class="stat-num" id="num-kenkou">50</div>
+      </div>
+      <div class="stat-item stat-jinmyaku">
+        <div class="stat-label">人脈</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-fill" id="bar-jinmyaku" style="width:50%"></div></div>
+        <div class="stat-num" id="num-jinmyaku">50</div>
+      </div>
+    </div>
+    <!-- シーンビジュアル -->
+    <div id="scene-visual">
+      <div id="scene-bg"></div>
+      <img id="scene-sprite" src="" alt="">
+      <div id="scene-location">
+        <span id="scene-num-label">Scene <span id="scene-num">1</span></span>
+        <span id="scene-loc-text"></span>
+      </div>
+    </div>
+    <!-- ダイアログ -->
+    <div id="dialog-area">
+      <div id="portrait-wrap">
+        <div id="portrait-circle">
+          <img id="portrait-img-real" src="" alt="">
+          <span id="portrait-char-text"></span>
+        </div>
+        <div id="portrait-name-small"></div>
+      </div>
+      <div id="text-box">
+        <div id="speaker-name"></div>
+        <div id="text-content"></div>
+        <span id="text-cursor"></span>
+      </div>
+    </div>
+    <div id="tap-hint">タップして次へ ▼</div>
+    <div id="game-action-bar">
+      <button id="btn-save-game">SAVE</button>
+      <button id="skip-btn">SKIP ▶▶</button>
+    </div>
+    <div id="choices-area"></div>
+  </div>
+
+  <div id="ending-screen">
+    <div class="ending-badge">E N D I N G</div>
+    <div class="ending-title" id="ending-title"></div>
+    <div class="ending-subtitle" id="ending-subtitle"></div>
+    <div class="ending-divider"></div>
+    <div class="ending-text" id="ending-text"></div>
+    <div class="ending-stats">
+      <div class="ending-stat"><div class="ending-stat-label">勇気</div><div class="ending-stat-val" id="es-yuuki"></div></div>
+      <div class="ending-stat"><div class="ending-stat-label">お金</div><div class="ending-stat-val" id="es-okane"></div></div>
+      <div class="ending-stat"><div class="ending-stat-label">健康</div><div class="ending-stat-val" id="es-kenkou"></div></div>
+      <div class="ending-stat"><div class="ending-stat-label">人脈</div><div class="ending-stat-val" id="es-jinmyaku"></div></div>
+    </div>
+    <div class="ending-btns">
+      <button class="ending-btn primary" id="btn-retry">もう一度プレイ</button>
+      <button class="ending-btn" id="btn-title">タイトルへ</button>
+    </div>
+  </div>
+
+
+  <!-- セーブ/ロードモーダル -->
+  <div class="modal-ov" id="modal-save">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span class="modal-head-title" id="modal-save-title">セーブ</span>
+        <button class="modal-x" id="modal-save-x">✕</button>
+      </div>
+      <div class="modal-body" id="modal-save-body"></div>
+    </div>
+  </div>
+
+  <!-- チャプター選択モーダル -->
+  <div class="modal-ov" id="modal-chapter">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span class="modal-head-title">チャプター選択</span>
+        <button class="modal-x" id="modal-chapter-x">✕</button>
+      </div>
+      <div class="modal-body" id="modal-chapter-body"></div>
+    </div>
+  </div>
+
+</div>
+<script>
+// ===== 背景アニメーション =====
+(function(){
+  const c = document.getElementById('bg-canvas');
+  const ctx = c.getContext('2d');
+  let stars = [];
+  function resize(){ c.width=innerWidth; c.height=innerHeight; }
+  function init(){
+    stars=[];
+    for(let i=0;i<90;i++) stars.push({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.3+0.2,a:Math.random(),s:Math.random()*0.004+0.001});
+  }
+  function draw(){
+    ctx.clearRect(0,0,c.width,c.height);
+    stars.forEach(s=>{
+      s.a+=s.s; if(s.a>1){s.a=0;s.x=Math.random()*c.width;s.y=Math.random()*c.height;}
+      ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(200,190,160,${s.a*0.5})`; ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+  window.addEventListener('resize',()=>{resize();init();});
+  resize(); init(); draw();
+})();
+
+// ===== キャラクタービジュアル =====
+const CHAR_STYLES = {
+  'しの':   {bg:'linear-gradient(145deg,#5c1530,#c04070)', char:'し', glow:'#e06080', file:'shino'},
+  '舞子':   {bg:'linear-gradient(145deg,#3c1060,#9040c0)', char:'舞', glow:'#b060e0', file:'maiko'},
+  'マキ':   {bg:'linear-gradient(145deg,#0c3050,#2070a0)', char:'マ', glow:'#40a0c0', file:'maki'},
+  'R':      {bg:'linear-gradient(145deg,#500c18,#c02030)', char:'Ｒ', glow:'#e04050', file:'R'},
+  'アキ':   {bg:'linear-gradient(145deg,#503808,#a07010)', char:'ア', glow:'#d0a020', file:'aki'},
+  'ハム':   {bg:'linear-gradient(145deg,#0c4028,#208050)', char:'ハ', glow:'#40c080', file:'hamu'},
+  '明美':   {bg:'linear-gradient(145deg,#104028,#308060)', char:'明', glow:'#60c090', file:'akemi'},
+  '店長':   {bg:'linear-gradient(145deg,#282828,#484848)', char:'長', glow:'#888'},
+  '先輩':   {bg:'linear-gradient(145deg,#252535,#404060)', char:'先', glow:'#8888aa'},
+  '田中':   {bg:'linear-gradient(145deg,#282828,#484848)', char:'田', glow:'#888'},
+  '同僚':   {bg:'linear-gradient(145deg,#282828,#484848)', char:'同', glow:'#888'},
+  '山田':   {bg:'linear-gradient(145deg,#203040,#405060)', char:'山', glow:'#8aaa'},
+  '中村':   {bg:'linear-gradient(145deg,#203030,#405050)', char:'村', glow:'#8aaa'},
+  '面接官': {bg:'linear-gradient(145deg,#1a2030,#304050)', char:'面', glow:'#8aaa'},
+  '母':     {bg:'linear-gradient(145deg,#402020,#806040)', char:'母', glow:'#c09060'},
+};
+
+// シーン背景グラデーション
+const SCENE_STYLES = {
+  // ── Chapter 1–3 ──
+  's1':                {bg:'linear-gradient(180deg,#1c1005 0%,#2e1808 55%,#1a0e04 100%)', loc:'買い取り王国',     prop:'shop.svg'},
+  's1b_skip':          {bg:'linear-gradient(180deg,#1c1005 0%,#2e1808 55%,#1a0e04 100%)', loc:'',               prop:'shop.svg'},
+  's2_shino':          {bg:'linear-gradient(180deg,#200818 0%,#380c28 55%,#180510 100%)', loc:'バイト帰り',       prop:'night_road.svg'},
+  's3_arrest':         {bg:'linear-gradient(180deg,#080810 0%,#101020 55%,#060610 100%)', loc:'',               prop:'taiho.png'},
+  's3_arrest_b':       {bg:'linear-gradient(180deg,#080810 0%,#101020 55%,#060610 100%)', loc:'',               prop:'taiho.png'},
+  's3_support':        {bg:'linear-gradient(180deg,#0f0515 0%,#1a0c28 55%,#0a0510 100%)', loc:'面会室',          prop:'menkai.png'},
+  's_bye_shino_arrest':{bg:'linear-gradient(180deg,#060610 0%,#0c0c18 55%,#060610 100%)', loc:'',               prop:'smartphone.png'},
+  's_bye_shino_support':{bg:'linear-gradient(180deg,#060610 0%,#0c0c18 55%,#060610 100%)', loc:'',              prop:'hospital.svg'},
+  // ── Chapter 4–5 ──
+  's4_daihatu':        {bg:'linear-gradient(180deg,#050f1e 0%,#0a1c38 55%,#050e1c 100%)', loc:'岐阜ダイハツ 研修', prop:'office.svg'},
+  's5_mako_close':     {bg:'linear-gradient(180deg,#0a0818 0%,#161030 55%,#0a0818 100%)', loc:'電車',            prop:'train.svg'},
+  's5_mako_distant':   {bg:'linear-gradient(180deg,#050f1e 0%,#0a1c38 55%,#050e1c 100%)', loc:'',               prop:'office.svg'},
+  's5_another':        {bg:'linear-gradient(180deg,#051508 0%,#0a2512 55%,#051508 100%)', loc:'',               prop:'cafe.jpg'},
+  's5_another_wait':   {bg:'linear-gradient(180deg,#051508 0%,#0a2512 55%,#051508 100%)', loc:'',               prop:'cafe.jpg'},
+  's5_another_deepen': {bg:'linear-gradient(180deg,#051508 0%,#0a2512 55%,#051508 100%)', loc:'',               prop:'park.svg'},
+  's5_another_end':    {bg:'linear-gradient(180deg,#030a05 0%,#060f08 55%,#030a05 100%)', loc:'',               prop:'park.svg'},
+  's5_no_love':        {bg:'linear-gradient(180deg,#0e0a06 0%,#1a140a 55%,#0e0a06 100%)', loc:'',               prop:'night_road.svg'},
+  's5_solo_time':      {bg:'linear-gradient(180deg,#060810 0%,#0c1020 55%,#060810 100%)', loc:'',               prop:'room.svg'},
+  // ── 明美アーク ──
+  's6_akemi_start':    {bg:'linear-gradient(180deg,#051508 0%,#0a2512 55%,#051508 100%)', loc:'',               prop:'cafe.jpg'},
+  's6_akemi_propose':  {bg:'linear-gradient(180deg,#0a1808 0%,#183010 55%,#0a1808 100%)', loc:'レストラン',       prop:'restaurant.svg'},
+  's6_akemi_balance':  {bg:'linear-gradient(180deg,#060e08 0%,#0e1810 55%,#060e08 100%)', loc:'',               prop:'park.svg'},
+  's6_akemi_work':     {bg:'linear-gradient(180deg,#080810 0%,#101028 55%,#080810 100%)', loc:'職場',            prop:'office.svg'},
+  // ── Chapter 6–7 ──
+  's6_marry':          {bg:'linear-gradient(180deg,#180f05 0%,#2e1c08 55%,#180f05 100%)', loc:'結婚式',          prop:'wedding.png'},
+  's7_affair':         {bg:'linear-gradient(180deg,#100810 0%,#1e0e1e 55%,#100810 100%)', loc:'',               prop:'uwaki.png'},
+  's7_forgive':        {bg:'linear-gradient(180deg,#100810 0%,#1e0e1e 55%,#100810 100%)', loc:'',               prop:'room.svg'},
+  's7_counsel':        {bg:'linear-gradient(180deg,#0a0810 0%,#141018 55%,#0a0810 100%)', loc:'カウンセリング室',  prop:'counseling.svg'},
+  's7_alone':          {bg:'linear-gradient(180deg,#050508 0%,#0a0a12 55%,#050508 100%)', loc:'',               prop:'dark_room.svg'},
+  's7_madness':        {bg:'linear-gradient(180deg,#0f0000 0%,#1e0000 55%,#0f0000 100%)', loc:'',               prop:'fight.svg'},
+  's7_sefure_start':   {bg:'linear-gradient(180deg,#100810 0%,#1e0e1e 55%,#100810 100%)', loc:'',               prop:'room.svg'},
+  's7_sefure_deep':    {bg:'linear-gradient(180deg,#080510 0%,#100a1e 55%,#080510 100%)', loc:'',               prop:'dark_room.svg'},
+  's_divorce_night':   {bg:'linear-gradient(180deg,#060606 0%,#0e0e0e 55%,#060606 100%)', loc:'深夜のコンビニ',   prop:'konbini.png'},
+  's8_divorce':        {bg:'linear-gradient(180deg,#080c10 0%,#101820 55%,#080c10 100%)', loc:'',               prop:'rikon.png'},
+  's8_divorce_nohamu': {bg:'linear-gradient(180deg,#080c10 0%,#101820 55%,#080c10 100%)', loc:'',               prop:'rikon.png'},
+  // ── Chapter 8–9 ──
+  's9_hamu':           {bg:'linear-gradient(180deg,#050d12 0%,#0a1c22 55%,#050d12 100%)', loc:'居酒屋',          prop:'izakaya.png'},
+  's9_app':            {bg:'linear-gradient(180deg,#080810 0%,#101018 55%,#080810 100%)', loc:'',               prop:'matchingapp.png'},
+  's9_drink_alone':    {bg:'linear-gradient(180deg,#0c0808 0%,#181010 55%,#0c0808 100%)', loc:'アパート',        prop:'izakaya.png'},
+  's9_drink_deep':     {bg:'linear-gradient(180deg,#080606 0%,#100c0c 55%,#080606 100%)', loc:'',               prop:'konbini.png'},
+  's9_bottom':         {bg:'linear-gradient(180deg,#060606 0%,#0a0a0a 55%,#060606 100%)', loc:'',               prop:'smartphone.png'},
+  's9_loneliness_app': {bg:'linear-gradient(180deg,#080810 0%,#101018 55%,#080810 100%)', loc:'',               prop:'matchingapp.png'},
+  's_nohamu_rebuild':  {bg:'linear-gradient(180deg,#061008 0%,#0c1a10 55%,#061008 100%)', loc:'',               prop:''},
+  's9_journey':        {bg:'linear-gradient(180deg,#050a08 0%,#0a1410 55%,#050a08 100%)', loc:'旅先',            prop:'train.svg'},
+  's9_journey_stay':   {bg:'linear-gradient(180deg,#060c0a 0%,#0c1814 55%,#060c0a 100%)', loc:'旅先の食堂',       prop:'izakaya.png'},
+  // ── Chapter 9–10 ──
+  's10_aki_intro':     {bg:'linear-gradient(180deg,#180c05 0%,#281808 55%,#180c05 100%)', loc:'',               prop:'smartphone.png'},
+  's10_aki_deep':      {bg:'linear-gradient(180deg,#180c05 0%,#281808 55%,#180c05 100%)', loc:'',               prop:'izakaya.png'},
+  's10_aki_serious':   {bg:'linear-gradient(180deg,#100c08 0%,#201808 55%,#100c08 100%)', loc:'',               prop:'restaurant.svg'},
+  's10_maki_intro':    {bg:'linear-gradient(180deg,#050818 0%,#0c1030 55%,#050818 100%)', loc:'マッチングアプリ',  prop:'matchingapp.png'},
+  's10_maki':          {bg:'linear-gradient(180deg,#050e18 0%,#0c1c2c 55%,#050e18 100%)', loc:'カフェ',          prop:'cafe.jpg'},
+  's10_maki_s':        {bg:'linear-gradient(180deg,#050e18 0%,#0c1c2c 55%,#050e18 100%)', loc:'',               prop:'cafe.jpg'},
+  's_bye_maki':        {bg:'linear-gradient(180deg,#060610 0%,#0e0e1a 55%,#060610 100%)', loc:'',               prop:'park.svg'},
+  // ── Chapter 10–12 ──
+  's11_R':             {bg:'linear-gradient(180deg,#180508 0%,#280a10 55%,#180508 100%)', loc:'',               prop:'bar.svg'},
+  's12_control':          {bg:'linear-gradient(180deg,#180508 0%,#280a10 55%,#180508 100%)', loc:'',               prop:'room.svg'},
+  's11_R_nohamu':         {bg:'linear-gradient(180deg,#0a0810 0%,#12101a 55%,#0a0810 100%)', loc:'',               prop:'smartphone.png'},
+  's12_control_nohamu':   {bg:'linear-gradient(180deg,#180508 0%,#280a10 55%,#180508 100%)', loc:'',               prop:'room.svg'},
+  's12_cut_hamu':      {bg:'linear-gradient(180deg,#060606 0%,#0e0e0e 55%,#060606 100%)', loc:'',               prop:'smartphone.png'},
+  's12_sneak':         {bg:'linear-gradient(180deg,#100508 0%,#200810 55%,#100508 100%)', loc:'',               prop:'smartphone.png'},
+  's12_resist':        {bg:'linear-gradient(180deg,#180508 0%,#280a10 55%,#180508 100%)', loc:'',               prop:'office.svg'},
+  's12_resist_talk':   {bg:'linear-gradient(180deg,#100810 0%,#1e0e1e 55%,#100810 100%)', loc:'',               prop:'room.svg'},
+  's12_fight':         {bg:'linear-gradient(180deg,#200308 0%,#380510 55%,#200308 100%)', loc:'路上',            prop:'fight.svg'},
+  's12_brutal':        {bg:'linear-gradient(180deg,#280308 0%,#450510 55%,#280308 100%)', loc:'路上',            prop:'fight.svg'},
+  's12_stop':          {bg:'linear-gradient(180deg,#05080c 0%,#0c1420 55%,#05080c 100%)', loc:'公園',            prop:'park.svg'},
+  // ── Chapter 12–13 ──
+  's13_R_talk':        {bg:'linear-gradient(180deg,#100810 0%,#1e0e1e 55%,#100810 100%)', loc:'',               prop:'room.svg'},
+  's13_R_break':       {bg:'linear-gradient(180deg,#060606 0%,#0e0e0e 55%,#060606 100%)', loc:'',               prop:'station.svg'},
+  's_bye_R':           {bg:'linear-gradient(180deg,#060606 0%,#0e0e0e 55%,#060606 100%)', loc:'',               prop:'station.svg'},
+  's14_marry_R':       {bg:'linear-gradient(180deg,#180f05 0%,#2e1c08 55%,#180f05 100%)', loc:'結婚式',          prop:'wedding_bless.png'},
+  // ── デスルート ──
+  's_isolation_spiral':{bg:'linear-gradient(180deg,#030305 0%,#060610 55%,#030305 100%)', loc:'',               prop:'dark_room.svg'},
+  's_death_edge':      {bg:'linear-gradient(180deg,#02020a 0%,#050515 55%,#02020a 100%)', loc:'川沿い',          prop:'riverside.svg'},
+  // ── 突発フラグ（INT）──
+  // ── ハム序盤 ──
+  's1_hamu':           {bg:'linear-gradient(180deg,#0c1008 0%,#141a10 55%,#0c1008 100%)', loc:'買い取り王国',     prop:'shop.svg'},
+  's1_hamu_close':     {bg:'linear-gradient(180deg,#0c1008 0%,#141a10 55%,#0c1008 100%)', loc:'近所の定食屋',     prop:'restaurant.svg'},
+  // ── しのストーカーINT ──
+  'int_shino_stalker':      {bg:'linear-gradient(180deg,#050510 0%,#0a0a1e 55%,#050510 100%)', loc:'帰り道',       prop:'night_road.svg'},
+  'int_shino_police':       {bg:'linear-gradient(180deg,#080810 0%,#101020 55%,#080810 100%)', loc:'警察署',        prop:'dark_room.svg'},
+  'int_shino_stalk_talk':   {bg:'linear-gradient(180deg,#050510 0%,#0a0a1e 55%,#050510 100%)', loc:'帰り道',       prop:'night_road.svg'},
+  'int_shino_goodbye':      {bg:'linear-gradient(180deg,#050510 0%,#0a0a1e 55%,#050510 100%)', loc:'帰り道',       prop:'night_road.svg'},
+  'int_shino_stalk_ignore': {bg:'linear-gradient(180deg,#020205 0%,#050510 55%,#020205 100%)', loc:'深夜',         prop:'night_road.svg'},
+  'int_shino_stalk_deep':   {bg:'linear-gradient(180deg,#020205 0%,#060610 55%,#020205 100%)', loc:'深夜',         prop:'dark_room.svg'},
+  // ── (既存) ──
+  'int_shino':         {bg:'linear-gradient(180deg,#0a0810 0%,#120f1e 55%,#0a0810 100%)', loc:'',               prop:'smartphone.png'},
+  'int_shino_reply':   {bg:'linear-gradient(180deg,#0a0810 0%,#120f1e 55%,#0a0810 100%)', loc:'',               prop:'smartphone.png'},
+  'int_shino_meet':    {bg:'linear-gradient(180deg,#200818 0%,#380c28 55%,#180510 100%)', loc:'深夜のカフェ',     prop:'cafe.jpg'},
+  'int_shino_sex':     {bg:'linear-gradient(180deg,#100508 0%,#1a0810 55%,#100508 100%)', loc:'',               prop:'room.svg'},
+  'int_shino_pregnant_call':{bg:'linear-gradient(180deg,#100508 0%,#1a0810 55%,#100508 100%)', loc:'',          prop:'park.svg'},
+  'int_shino_baby':    {bg:'linear-gradient(180deg,#100508 0%,#1a0810 55%,#100508 100%)', loc:'',               prop:'hospital.svg'},
+  'int_shino_abandon': {bg:'linear-gradient(180deg,#060606 0%,#0e0e0e 55%,#060606 100%)', loc:'',               prop:'park.svg'},
+  'int_maiko':         {bg:'linear-gradient(180deg,#0a0810 0%,#120f1e 55%,#0a0810 100%)', loc:'',               prop:'smartphone.png'},
+  'int_maiko_meet':    {bg:'linear-gradient(180deg,#100818 0%,#1e0f28 55%,#100818 100%)', loc:'',               prop:'bar.svg'},
+  'int_maiko_sex':     {bg:'linear-gradient(180deg,#0a0418 0%,#120820 55%,#0a0418 100%)', loc:'',               prop:'room.svg'},
+  'int_maiko_found':   {bg:'linear-gradient(180deg,#1a0408 0%,#280610 55%,#1a0408 100%)', loc:'修羅場',          prop:'fight.svg'},
+  'int_R_stab':        {bg:'linear-gradient(180deg,#0f0000 0%,#1e0000 55%,#0f0000 100%)', loc:'',               prop:'stab.svg'},
+  'int_R_voice':       {bg:'linear-gradient(180deg,#0a0000 0%,#160000 55%,#0a0000 100%)', loc:'病院',            prop:'hospital.svg'},
+  'int_R_meet':        {bg:'linear-gradient(180deg,#080810 0%,#101018 55%,#080810 100%)', loc:'面会室',          prop:'menkai.png'},
+  'int_aki':           {bg:'linear-gradient(180deg,#0a0810 0%,#120f1e 55%,#0a0810 100%)', loc:'',               prop:'smartphone.png'},
+  'int_aki_call':      {bg:'linear-gradient(180deg,#100808 0%,#1e1008 55%,#100808 100%)', loc:'',               prop:'smartphone.png'},
+  'int_aki_visit':     {bg:'linear-gradient(180deg,#180c05 0%,#281808 55%,#180c05 100%)', loc:'深夜',            prop:'room.svg'},
+  'int_aki_sex':       {bg:'linear-gradient(180deg,#100808 0%,#1e1008 55%,#100808 100%)', loc:'',               prop:'room.svg'},
+  'int_aki_pregnant':  {bg:'linear-gradient(180deg,#100808 0%,#1e1008 55%,#100808 100%)', loc:'',               prop:'hospital.svg'},
+  'int_maki':          {bg:'linear-gradient(180deg,#0a0810 0%,#120f1e 55%,#0a0810 100%)', loc:'',               prop:'smartphone.png'},
+  'int_maki_meet':     {bg:'linear-gradient(180deg,#050e18 0%,#0c1c2c 55%,#050e18 100%)', loc:'前夜',            prop:'bar.svg'},
+  'int_maki_sex':      {bg:'linear-gradient(180deg,#050e18 0%,#0c1c2c 55%,#050e18 100%)', loc:'',               prop:'room.svg'},
+  'int_maki_death_shock':{bg:'linear-gradient(180deg,#020205 0%,#050510 55%,#020205 100%)', loc:'',             prop:'smartphone.png'},
+  default:             {bg:'linear-gradient(180deg,#080810 0%,#12121e 55%,#080810 100%)', loc:''},
+};
+
+function updateVisuals(sceneId, speaker){
+  // 背景グラデーション
+  const sc = SCENE_STYLES[sceneId] || SCENE_STYLES.default;
+  document.getElementById('scene-bg').style.background = sc.bg;
+  document.getElementById('scene-loc-text').textContent = sc.loc || '';
+  document.getElementById('scene-num').textContent = (SCENES[sceneId]&&SCENES[sceneId].num)||'?';
+
+  // キャラクタースプライト（本物の画像がある場合）
+  const spriteEl = document.getElementById('scene-sprite');
+  const isNarrator = !speaker || speaker==='' || speaker.includes('心の声') || speaker.includes('メッセージ') || speaker.includes('返信') || speaker.includes('アプリ') || speaker.includes('ひそひそ');
+
+  // スプライト画像（images/sprites/{key}.png）
+  const spriteKey = isNarrator ? null : Object.keys(CHAR_STYLES).find(k=>speaker.startsWith(k)||speaker===k);
+
+  function loadImg(el, src, propMode){
+    if(propMode !== undefined){ if(propMode) el.classList.add('prop-mode'); else el.classList.remove('prop-mode'); }
+    const show = ()=>{ el.style.display='block'; };
+    const hide = ()=>{ el.style.display='none'; };
+    el.onload  = show;
+    el.onerror = hide;
+    if(!src){ hide(); el.src=''; return; }
+    if(el.src.endsWith(src.replace(/^.*\//,'')) && el.complete){
+      el.naturalWidth > 0 ? show() : hide();
+    } else {
+      el.src = src;
+      if(el.complete){ el.naturalWidth > 0 ? show() : hide(); }
+    }
+  }
+
+  if(spriteKey){
+    loadImg(spriteEl, `images/sprites/${CHAR_STYLES[spriteKey].file||spriteKey}.png`, false);
+  } else {
+    const propFile = sc.prop;
+    if(propFile) loadImg(spriteEl, `images/props/${propFile}`, true);
+    // propなしナレーションは前の立ち絵をそのまま維持
+  }
+
+  // ポートレイト（小さい円形）
+  const pWrap   = document.getElementById('portrait-wrap');
+  const pCircle = document.getElementById('portrait-circle');
+  const pChar   = document.getElementById('portrait-char-text');
+  const pImgR   = document.getElementById('portrait-img-real');
+  const pSmall  = document.getElementById('portrait-name-small');
+
+  if(isNarrator){
+    // ナレーション中もポートレイトをそのまま維持
+  } else {
+    pWrap.style.display = 'flex';
+    const key = Object.keys(CHAR_STYLES).find(k=>speaker.startsWith(k)||speaker===k);
+    if(key){
+      const cs = CHAR_STYLES[key];
+      pCircle.style.background  = cs.bg;
+      pCircle.style.boxShadow   = `0 0 14px ${cs.glow}55, inset 0 0 8px rgba(0,0,0,0.4)`;
+      pChar.textContent = cs.char;
+      pChar.style.display = 'flex';
+      // ポートレイト画像があれば使用
+      const pSrc = `images/portraits/${cs.file||key}.png`;
+      pImgR.onload  = ()=>{ pImgR.style.display='block'; pChar.style.display='none'; };
+      pImgR.onerror = ()=>{ pImgR.style.display='none'; pChar.style.display='flex'; };
+      if(pImgR.src.endsWith(pSrc.replace(/^.*\//,'')) && pImgR.complete){
+        if(pImgR.naturalWidth > 0){ pImgR.style.display='block'; pChar.style.display='none'; }
+        else { pImgR.style.display='none'; pChar.style.display='flex'; }
+      } else {
+        pImgR.src = pSrc;
+        if(pImgR.complete){ pImgR.naturalWidth>0 ? (pImgR.style.display='block',pChar.style.display='none') : (pImgR.style.display='none',pChar.style.display='flex'); }
+      }
+    } else {
+      pCircle.style.background = 'linear-gradient(145deg,#2a2a2a,#444)';
+      pCircle.style.boxShadow  = 'none';
+      pChar.textContent = speaker[0]||'?';
+      pChar.style.display='flex';
+      pImgR.src='';
+    }
+    pSmall.textContent = speaker.replace(/（[^）]*）/g,'').trim();
+  }
+}
+
+// ===== ストーリーデータ =====
+const SCENES = {
+
+  // ===== 序盤 ハム出会い =====
+  's1_hamu': {
+    num:'1', title:'バイト仲間',
+    texts:[
+      {sp:'',tx:'——20代の前半。'},
+      {sp:'',tx:'たかは地元のリサイクルショップ「買い取り王国」でアルバイトをしていた。担当はホビーコーナー。フィギュアやゲームの査定が日々の仕事だ。'},
+      {sp:'たか（心の声）',tx:'今日も平和なバイトだな。'},
+      {sp:'',tx:'バイト終わり、アパレル担当の後輩が声をかけてきた。'},
+      {sp:'ハム',tx:'たかさん、俺ハムっす。よろしくっす。飯でも行きません？'},
+      {sp:'たか（心の声）',tx:'馴れ馴れしいやつだな。でも……悪い感じはしない。'},
+    ],
+    choices:[
+      {tx:'「いいよ、行こうか」と軽く応じる',      ef:{yuuki:+5,okane:-3,kenkou:+3,jinmyaku:+10}, nx:'s1_hamu_close'},
+      {tx:'「ありがとう、また今度ね」と流す',      ef:{yuuki:0,okane:0,kenkou:0,jinmyaku:+3},    nx:'s1'},
+      {tx:'「今日はちょっと……」と断る',           ef:{yuuki:-3,okane:+3,kenkou:0,jinmyaku:-2},   nx:'s1'},
+    ]
+  },
+
+  's1_hamu_close': {
+    num:'1', title:'ハムと小川さん野田さん',
+    texts:[
+      {sp:'',tx:'近くの定食屋に入った。たかは気づいたら車の話ばかりしていた。'},
+      {sp:'ハム',tx:'……たかさん、車の話しかしないっすね（笑）'},
+      {sp:'たか',tx:'え、そう？'},
+      {sp:'ハム',tx:'いや、正直ちょっとつまんないっす（笑）。俺ファッションの話したいんすよ。'},
+      {sp:'たか（心の声）',tx:'（こいつ、正直だな……）'},
+      {sp:'',tx:'それから数週間後、先輩の小川さんと野田さんがカラオケに誘ってくれた。'},
+      {sp:'小川',tx:'たかも来いよ。ハムも連れて来ていいから。'},
+      {sp:'',tx:'その夜が、なんだかんだ楽しかった。ハムとも自然に打ち解けていった。'},
+      {sp:'たか（心の声）',tx:'バイト仲間って、悪くないな。'},
+    ],
+    choices:null, nx:'s1'
+  },
+
+  's1': {
+    num:'1', title:'買い取り王国',
+    texts:[
+      {sp:'',  tx:'それから数週間が経ったある日、新しいバイトが入ってきた。\nしの、という女の子だった。'},
+      {sp:'しの', tx:'あの……たかさんですよね？今日からよろしくお願いします。'},
+      {sp:'',  tx:'少し不安そうな表情をしていたが、目が合うと小さく笑った。なんか放っておけない感じがした。'},
+    ],
+    choices:[
+      {tx:'積極的に話しかけて仲良くなっていく',        ef:{yuuki:+5,okane:0,kenkou:0,jinmyaku:+5},   nx:'s2_shino'},
+      {tx:'普通に仕事仲間として接する（深入りしない）', ef:{yuuki:0,okane:+5,kenkou:+5,jinmyaku:0},  nx:'s1b_skip'},
+      {tx:'さりげなく気にかけながら、自分の仕事に集中する', ef:{yuuki:0,okane:+10,kenkou:+5,jinmyaku:+3}, nx:'s1b_skip'},
+    ]
+  },
+
+  // ===== 別れの余韻シーン =====
+  's_bye_shino_arrest': {
+    num:'3', title:'',
+    texts:[
+      {sp:'',tx:'電話を切った。'},
+      {sp:'',tx:'しのの声が頭に残っていた。あの小さな声で「ごめん」と言っていた。'},
+      {sp:'たか（心の声）',tx:'……俺は何もしてあげられなかった。'},
+      {sp:'たか（心の声）',tx:'いや、できることはあったかもしれない。でも、自分の人生を捨てることはできなかった。'},
+      {sp:'',tx:'それが正しい判断かどうかは、今もわからない。'},
+      {sp:'たか（心の声）',tx:'元気でいてほしい。それだけだ。'},
+    ],
+    choices:null, nx:'s4_daihatu'
+  },
+
+  's_bye_shino_support': {
+    num:'3', title:'',
+    texts:[
+      {sp:'',tx:'しのとの関係に、一線を引いた。'},
+      {sp:'',tx:'「もう会いに来ないで」と言った時のしのの顔が忘れられない。'},
+      {sp:'たか（心の声）',tx:'……俺は逃げたのか？'},
+      {sp:'',tx:'いや、限界だった。これ以上続けていたら、俺自身が壊れていた。'},
+      {sp:'たか（心の声）',tx:'支えることと、溺れることは、違う。そう言い聞かせながら、たかは歩き続けた。'},
+    ],
+    choices:null, nx:'s4_daihatu'
+  },
+
+  's_divorce_night': {
+    num:'7', title:'',
+    texts:[
+      {sp:'',tx:'離婚届を出した日の夜、たかは一人でコンビニのイートインに座っていた。'},
+      {sp:'',tx:'何かを食べる気にもなれなくて、ホットコーヒーだけ買った。'},
+      {sp:'たか（心の声）',tx:'結婚して半年。……なんだったんだろう。'},
+      {sp:'たか（心の声）',tx:'舞子のことが憎いのか？　わからない。ただ虚しい。'},
+      {sp:'',tx:'コーヒーが冷めるまで、たかはそこを動けなかった。'},
+    ],
+    choices:null, nx:'s8_divorce'
+  },
+
+  's_bye_maki': {
+    num:'10', title:'',
+    texts:[
+      {sp:'',tx:'マキに正直に話した。「俺には支えきれない」と。'},
+      {sp:'マキ',tx:'……わかった。ありがとう、ちゃんと向き合ってくれて。'},
+      {sp:'',tx:'怒らなかった。泣きもしなかった。それがかえって胸に刺さった。'},
+      {sp:'たか（心の声）',tx:'俺は逃げたのか。それとも正しい判断をしたのか。'},
+      {sp:'マキ',tx:'……たかさんのこと、好きだったよ。'},
+      {sp:'たか（心の声）',tx:'俺もだ。それだけは本当だ。'},
+      {sp:'',tx:'その答えは、まだ出ていない。'},
+    ],
+    choices:null, nx:'s11_R'
+  },
+
+  's_bye_R': {
+    num:'12', title:'',
+    texts:[
+      {sp:'',tx:'Rとの荷物を分けた。それだけで半日かかった。'},
+      {sp:'',tx:'最後にRは「元気でね」とだけ言った。怒鳴りも泣きもしなかった。'},
+      {sp:'たか（心の声）',tx:'……こんな終わり方か。'},
+      {sp:'',tx:'部屋に戻ると、静かだった。久しぶりに味わう静けさだった。'},
+      {sp:'たか（心の声）',tx:'解放されたのか、また一人になったのか。どっちだろう。'},
+      {sp:'たか（心の声）',tx:'……多分、両方だ。'},
+    ],
+    choices:[
+      {tx:'新しい出会いを探して前を向く',            ef:{yuuki:+10,okane:+5,kenkou:+10,jinmyaku:+5}, nx:'END_new_start'},
+      {tx:'しばらくは一人でいい。それでいい',         ef:{yuuki:+15,okane:+10,kenkou:+15,jinmyaku:0}, nx:'END_isolated'},
+      {tx:'ひとり旅に出る。遠くの景色で頭を整理する', ef:{yuuki:+15,okane:-10,kenkou:+10,jinmyaku:0}, nx:'END_journey_reset'},
+    ]
+  },
+
+  's1b_skip': {
+    num:'2', title:'',
+    texts:[
+      {sp:'',tx:'しのとはシフトが被っても普通の会話しかしなかった。'},
+      {sp:'',tx:'数ヶ月後、しのがある事情でバイトを辞めたと耳にした。詳しいことは聞かなかった。'},
+      {sp:'たか（心の声）',tx:'……まあ、俺には関係ない話か。'},
+    ],
+    choices:null, nx:'s4_daihatu'
+  },
+
+  's2_shino': {
+    num:'2', title:'しの',
+    texts:[
+      {sp:'',tx:'しのとはすぐに打ち解けた。バイト終わりに二人でよく飯を食うようになり、気づいたら付き合っていた。'},
+      {sp:'たか（心の声）',tx:'こいつ、どこか危うい感じがする。でも、それも含めて放っておけない。'},
+      {sp:'',tx:'ある夜、しのが袖をめくった。腕に傷があった。'},
+      {sp:'しの',tx:'ごめん……隠してた。消えないようにしてるんだけど、また……。'},
+      {sp:'たか（心の声）',tx:'リスカ。知識はあったけど、目の前で見ると頭が真っ白になった。'},
+    ],
+    choices:[
+      {tx:'「俺がそばにいる」と言って支え続ける',           ef:{yuuki:+10,okane:-5,kenkou:-15,jinmyaku:0},  nx:'s3_arrest'},
+      {tx:'「プロに相談してほしい」と距離を置きつつ支える', ef:{yuuki:+5,okane:0,kenkou:+10,jinmyaku:0},    nx:'s3_arrest_b'},
+      {tx:'一緒に相談機関を探して、二人で問題に向き合う',   ef:{yuuki:+10,okane:0,kenkou:+5,jinmyaku:+5},   nx:'s3_arrest_b'},
+    ]
+  },
+
+  's3_arrest': {
+    num:'3', title:'逮捕',
+    texts:[
+      {sp:'',tx:'それから半年ほど経ったある日、店長に呼ばれた。'},
+      {sp:'店長',tx:'たかくん、しのちゃんのこと知ってるか。レジ金が……。'},
+      {sp:'',tx:'しのがレジから現金を繰り返し盗んでいたことが発覚した。警察が来て、そのまま連行された。'},
+      {sp:'たか（心の声）',tx:'あいつ……何してたんだ。なんで言ってくれなかったんだ。'},
+      {sp:'',tx:'留置所から一度だけ電話が来た。'},
+      {sp:'しの（電話）',tx:'……ごめん。借金が返せなくて。たかに頼みたかったけど言えなかった。'},
+    ],
+    choices:[
+      {tx:'面会に行き、弁護士費用も工面しようとする',  ef:{yuuki:+5,okane:-25,kenkou:-15,jinmyaku:0}, nx:'s3_support'},
+      {tx:'「もう終わりにしよう」と関係を断ち切る',    ef:{yuuki:+15,okane:0,kenkou:+10,jinmyaku:0},  nx:'s_bye_shino_arrest'},
+      {tx:'金は出せないが、精神的なサポートだけはする', ef:{yuuki:+10,okane:-5,kenkou:-10,jinmyaku:0},  nx:'s3_support'},
+    ]
+  },
+
+  's3_arrest_b': {
+    num:'3', title:'逮捕',
+    texts:[
+      {sp:'',tx:'少し距離を置いてから数ヶ月後。突然しのがバイトを無断欠勤した。'},
+      {sp:'同僚',tx:'たかくん知ってる？しのちゃん、レジ金盗んで捕まったって……。'},
+      {sp:'たか（心の声）',tx:'……そういうことか。あの子、助けを求めてたのかもしれない。俺は見て見ぬふりをしてた。'},
+    ],
+    choices:[
+      {tx:'連絡を取ってみる',    ef:{yuuki:+5,okane:-5,kenkou:-5,jinmyaku:0}, nx:'s3_support'},
+      {tx:'このまま縁を切る',    ef:{yuuki:+10,okane:0,kenkou:+5,jinmyaku:0}, nx:'s_bye_shino_arrest'},
+      {tx:'手紙だけ出す。直接会いには行かない', ef:{yuuki:+5,okane:0,kenkou:+5,jinmyaku:0}, nx:'s_bye_shino_arrest'},
+    ]
+  },
+
+  's3_support': {
+    num:'3', title:'支える',
+    texts:[
+      {sp:'',tx:'たかはしのを支えるために動き続けた。弁護士を探し、示談交渉の場にも同席した。'},
+      {sp:'',tx:'お金は減り続けた。睡眠も取れなかった。'},
+      {sp:'たか（心の声）',tx:'でも……放っておけない。この子は本当はただ、助けを求めてただけなんだ。'},
+      {sp:'しの（面会室）',tx:'なんでこんなにしてくれるの。もう関係ないのに。'},
+      {sp:'たか',tx:'関係ないことはない。俺はお前のことが好きだったんだから。'},
+    ],
+    choices:[
+      {tx:'どこまでも支え続ける。全部捧げる', ef:{yuuki:+15,okane:-30,kenkou:-25,jinmyaku:-10}, nx:'END_shino'},
+      {tx:'一線を引く。自分の人生を諦めない',  ef:{yuuki:+10,okane:-10,kenkou:-5,jinmyaku:0},   nx:'s_bye_shino_support'},
+      {tx:'NPOや支援団体に繋いで、自分は一歩引く', ef:{yuuki:+5,okane:-5,kenkou:+5,jinmyaku:+5}, nx:'s_bye_shino_support'},
+    ]
+  },
+
+  's4_daihatu': {
+    num:'4', title:'岐阜ダイハツ',
+    texts:[
+      {sp:'',tx:'バイト生活を終え、たかは岐阜ダイハツに就職した。'},
+      {sp:'',tx:'入社研修の数日目。一つ上の先輩に連れられてグループ研修に参加すると、見慣れない顔があった。'},
+      {sp:'先輩',tx:'たか、こっちが違う営業所の舞子ちゃん。同期研修だから仲良くしてやれ。'},
+      {sp:'舞子',tx:'はじめまして。舞子です。よろしくお願いします。'},
+      {sp:'',tx:'よく笑う人だった。研修のあと、たまたま二人で同じ電車になった。'},
+      {sp:'舞子',tx:'あの……ちょっと相談があるんですけど、聞いてもらえますか？'},
+      {sp:'たか（心の声）',tx:'出会ってすぐ相談。どうした？'},
+    ],
+    choices:[
+      {tx:'「もちろん、どうした？」と親身に聞く',       ef:{yuuki:+5,okane:0,kenkou:0,jinmyaku:+10}, nx:'s5_mako_close'},
+      {tx:'「まだ知り合ったばかりだし……」と軽く返す', ef:{yuuki:0,okane:0,kenkou:+5,jinmyaku:0},   nx:'s5_mako_distant'},
+      {tx:'「飯でも食いながら聞こうか」と軽く誘う',   ef:{yuuki:+10,okane:-3,kenkou:+3,jinmyaku:+8}, nx:'s5_mako_close'},
+    ]
+  },
+
+  's5_mako_close': {
+    num:'5', title:'舞子',
+    texts:[
+      {sp:'舞子',tx:'実は……婚約者がいるんです。でも最近すれ違ってて、どうしたらいいかわからなくて。'},
+      {sp:'たか（心の声）',tx:'婚約者……。それを俺に相談するのか。'},
+      {sp:'',tx:'それからたかと舞子はよく会うようになった。相談が、いつの間にか二人の時間になっていた。'},
+      {sp:'舞子',tx:'たかくんといると、なんか楽なんですよね。'},
+      {sp:'たか（心の声）',tx:'……これ、好きになってる。でも彼女には婚約者がいる。'},
+    ],
+    choices:[
+      {tx:'「婚約者とはどうするの？」とはっきり聞く',     ef:{yuuki:+15,okane:0,kenkou:0,jinmyaku:+5},  nx:'s6_marry'},
+      {tx:'気持ちを隠したまま友人として寄り添い続ける',   ef:{yuuki:-10,okane:0,kenkou:-10,jinmyaku:+5}, nx:'s6_marry'},
+      {tx:'「俺はただの相談相手でいる」と自分に言い聞かせる', ef:{yuuki:+5,okane:0,kenkou:+5,jinmyaku:+5}, nx:'s5_another'},
+    ]
+  },
+
+  's5_mako_distant': {
+    num:'5', title:'新しい出会い',
+    texts:[
+      {sp:'',tx:'舞子とはその後も研修で顔を合わせたが、特別な仲にはならなかった。'},
+      {sp:'',tx:'ある日の昼休み、同じ部署の田中さんが話しかけてきた。'},
+      {sp:'田中',tx:'たかくん、うちの妹の友達に会ってみない？いい子だよ、明美っていって。'},
+      {sp:'たか（心の声）',tx:'なんだ突然……でも悪い気はしない。'},
+    ],
+    choices:[
+      {tx:'「いいですよ」と紹介してもらう',               ef:{yuuki:+5,okane:0,kenkou:+5,jinmyaku:+10}, nx:'s5_another'},
+      {tx:'「やっぱり舞子さんが気になる」と思い直す',     ef:{yuuki:+10,okane:0,kenkou:0,jinmyaku:+5},  nx:'s5_mako_close'},
+      {tx:'「別の人も紹介してもらえますか」と別の出会いを探す', ef:{yuuki:0,okane:0,kenkou:+5,jinmyaku:+10}, nx:'s5_another'},
+    ]
+  },
+
+  's5_another': {
+    num:'5', title:'明美',
+    texts:[
+      {sp:'',tx:'明美は穏やかで、落ち着いた雰囲気の女性だった。'},
+      {sp:'明美',tx:'たかさんって、なんか話しやすいですね。'},
+      {sp:'',tx:'何度か会ううちに、たかは明美のことが好きになっていた。'},
+      {sp:'たか（心の声）',tx:'こんな穏やかな関係、久しぶりだ。しのとは全然違う。'},
+      {sp:'明美',tx:'……あのさ、もし良ければ、ちゃんと付き合ってほしいんだけど。'},
+    ],
+    choices:[
+      {tx:'「俺もそう思ってた」と付き合う',       ef:{yuuki:+10,okane:+10,kenkou:+15,jinmyaku:+10}, nx:'s6_akemi_start'},
+      {tx:'「もう少し時間をかけたい」と保留にする', ef:{yuuki:0,okane:0,kenkou:+5,jinmyaku:+5},      nx:'s5_another_wait'},
+      {tx:'「友人として、もっと知りたい」とゆっくり関係を育てる', ef:{yuuki:+5,okane:+5,kenkou:+10,jinmyaku:+5}, nx:'END_another'},
+    ]
+  },
+
+  's5_another_wait': {
+    num:'5', title:'明美',
+    texts:[
+      {sp:'明美',tx:'……そっか。'},
+      {sp:'',tx:'少し間があった。明美は目を伏せて、ゆっくり息を吐いた。'},
+      {sp:'明美',tx:'急かしてごめんね。正直に言ってくれて、ありがとう。'},
+      {sp:'たか（心の声）',tx:'怒らなかった。それがかえって、胸に刺さった。'},
+      {sp:'明美',tx:'……もし気持ちが決まったら、教えてくれる？待ってるから。'},
+    ],
+    choices:[
+      {tx:'「待たせたくない。好きです」と気持ちを伝える',        ef:{yuuki:+15,okane:0,kenkou:+10,jinmyaku:+10}, nx:'END_another'},
+      {tx:'「待っていてくれるなら、もう少し一緒にいさせてほしい」', ef:{yuuki:+5,okane:0,kenkou:+5,jinmyaku:+10},  nx:'s5_another_deepen'},
+      {tx:'「……ごめん、やっぱり今は無理だ」と正直に言う',        ef:{yuuki:+10,okane:0,kenkou:0,jinmyaku:-5},   nx:'s5_no_love'},
+    ]
+  },
+
+  's5_no_love': {
+    num:'5', title:'一人で',
+    texts:[
+      {sp:'たか',tx:'……ごめん。今の俺には、誰かと付き合う準備ができてない。'},
+      {sp:'',tx:'明美は少し黙って、ゆっくり頷いた。'},
+      {sp:'明美',tx:'……そっか。正直に言ってくれてありがとう。無理しないでね。'},
+      {sp:'',tx:'彼女は何も責めなかった。それが一番、胸に刺さった。'},
+      {sp:'たか（心の声）',tx:'舞子のことも、明美のことも……俺はどこにも踏み込めなかった。'},
+      {sp:'たか（心の声）',tx:'でも不思議と、後悔だけではなかった。'},
+    ],
+    choices:[
+      {tx:'「仕事に集中しよう」と割り切る',             ef:{yuuki:+10,okane:+5,kenkou:0,jinmyaku:0},   nx:'s5_solo_time'},
+      {tx:'「いつか本当に好きになれる人に出会える」と信じる', ef:{yuuki:+5,okane:0,kenkou:+5,jinmyaku:+5},  nx:'s5_solo_time'},
+    ]
+  },
+
+  's5_solo_time': {
+    num:'5', title:'時が経つ',
+    texts:[
+      {sp:'',tx:'それから数年が経った。'},
+      {sp:'',tx:'舞子は別の人と結婚したと、田中さんから聞いた。'},
+      {sp:'たか（心の声）',tx:'……そうか。よかったんじゃないか。'},
+      {sp:'',tx:'恋愛から遠ざかっていたたかは、仕事に打ち込み、少しずつ自分を取り戻していった。'},
+      {sp:'たか（心の声）',tx:'ひとりは寂しい。でも焦るより、自分のペースでいい。'},
+      {sp:'',tx:'——ある日、友人から「マッチングアプリ試してみたら？」と勧められた。'},
+    ],
+    choices:[
+      {tx:'試してみる。新しい出会いを探そう',            ef:{yuuki:+10,okane:-5,kenkou:+5,jinmyaku:+10},  nx:'s10_maki_intro'},
+      {tx:'いや……今は一人でいい。そういう人生もある',   ef:{yuuki:+15,okane:+5,kenkou:+10,jinmyaku:0},   nx:'END_solo'},
+    ]
+  },
+
+  's5_another_deepen': {
+    num:'5', title:'明美',
+    texts:[
+      {sp:'',tx:'それからも二人は会い続けた。'},
+      {sp:'',tx:'一緒に映画を観て、ご飯を食べて、他愛もない話をした。'},
+      {sp:'明美',tx:'たかさんって、ゆっくり信頼関係を作る人なんだね。'},
+      {sp:'たか（心の声）',tx:'……俺のことを、ちゃんと見てくれてる。'},
+      {sp:'明美',tx:'私、それが好きだよ。焦らせてくれないから、一緒にいて楽なんだ。'},
+      {sp:'たか（心の声）',tx:'この人といると、自分が自分でいられる気がした。'},
+    ],
+    choices:[
+      {tx:'「俺も……好きです」とやっと言えた',            ef:{yuuki:+20,okane:0,kenkou:+10,jinmyaku:+15}, nx:'s6_akemi_start'},
+      {tx:'「もう少しだけ一緒にいてほしい」とまだ保留にする', ef:{yuuki:-5,okane:0,kenkou:-5,jinmyaku:-10},  nx:'s5_another_end'},
+      {tx:'「友達として、ずっとそばにいたい」と素直に伝える', ef:{yuuki:+10,okane:0,kenkou:+5,jinmyaku:+5},  nx:'END_another'},
+    ]
+  },
+
+  's5_another_end': {
+    num:'5', title:'明美',
+    texts:[
+      {sp:'',tx:'また数週間が経った。'},
+      {sp:'明美',tx:'……ねえ、たかさん。'},
+      {sp:'明美',tx:'私、ずっと待ってたけど……もう限界かな。'},
+      {sp:'たか（心の声）',tx:'当たり前だ。俺がいけなかった。'},
+      {sp:'明美',tx:'たかさんのこと、嫌いじゃないよ。でも……これ以上は、私がしんどい。'},
+      {sp:'',tx:'明美は、泣かなかった。静かに、前を向いていた。'},
+    ],
+    choices:[
+      {tx:'「ごめん……好きだった。遅すぎたけど」と謝る', ef:{yuuki:+5,okane:0,kenkou:-5,jinmyaku:-5},  nx:'END_akemi_late'},
+      {tx:'「わかった。ありがとう」と受け入れる',          ef:{yuuki:+10,okane:0,kenkou:+5,jinmyaku:0}, nx:'s5_solo_time'},
+      {tx:'「待ってくれ。もう迷わない」と引き止める',      ef:{yuuki:+20,okane:0,kenkou:0,jinmyaku:+5}, nx:'END_another'},
+    ]
+  },
+
+  // ===== 明美アーク =====
+  's6_akemi_start': {
+    num:'6', title:'明美と',
+    texts:[
+      {sp:'',tx:'明美と付き合い始めた。'},
+      {sp:'',tx:'しのとも、舞子とも違う。穏やかで、安心できる関係だった。'},
+      {sp:'明美',tx:'たかさんって、ちゃんと話聞いてくれるから好きだよ。'},
+      {sp:'たか（心の声）',tx:'こういう関係を、ずっと求めてたのかもしれない。'},
+      {sp:'',tx:'半年が経った。たかは、この先を考えていた。'},
+    ],
+    choices:[
+      {tx:'「この人と結婚したい」と真剣に向き合う',        ef:{yuuki:+10,okane:+5,kenkou:+10,jinmyaku:+10}, nx:'s6_akemi_propose'},
+      {tx:'「楽しい今を大切に」と先のことは考えないようにする', ef:{yuuki:-5,okane:+5,kenkou:+5,jinmyaku:+5},  nx:'s6_akemi_balance'},
+      {tx:'「仕事も頑張りたい」と二足のわらじを目指す',    ef:{yuuki:+5,okane:+10,kenkou:+5,jinmyaku:0},   nx:'s6_akemi_work'},
+    ]
+  },
+
+  's6_akemi_propose': {
+    num:'6', title:'プロポーズ',
+    texts:[
+      {sp:'',tx:'付き合って2年が経った。'},
+      {sp:'たか（心の声）',tx:'明美と——ずっといたい。'},
+      {sp:'',tx:'たかはプロポーズのための指輪を買った。\n誕生日の夜、レストランで差し出した。'},
+      {sp:'明美',tx:'……え。'},
+      {sp:'明美',tx:'……泣いていい？　嬉しくて。'},
+      {sp:'たか（心の声）',tx:'その顔を見て、間違ってなかったと思った。'},
+    ],
+    choices:[
+      {tx:'「ずっとそばにいてほしい」と伝える',          ef:{yuuki:+20,okane:-10,kenkou:+10,jinmyaku:+15}, nx:'END_akemi_marry'},
+      {tx:'「実は……転勤の辞令が出て」と打ち明ける',     ef:{yuuki:-5,okane:+5,kenkou:-10,jinmyaku:-10},  nx:'END_akemi_apart'},
+    ]
+  },
+
+  's6_akemi_balance': {
+    num:'6', title:'明美と',
+    texts:[
+      {sp:'',tx:'交際は続いた。楽しかった。でも——気づけば3年が経っていた。'},
+      {sp:'明美',tx:'たかさん……私たち、これからどうするの？'},
+      {sp:'たか（心の声）',tx:'いつかは……とは思ってたけど。'},
+      {sp:'明美',tx:'私、たかさんのことは好きだよ。でも……このまま進まないなら、考えないといけないな。'},
+    ],
+    choices:[
+      {tx:'「今すぐ結婚しよう」と覚悟を決める',    ef:{yuuki:+20,okane:-5,kenkou:+5,jinmyaku:+10},  nx:'END_akemi_late'},
+      {tx:'「もう少し待ってくれ」とまた先延ばしにする', ef:{yuuki:-10,okane:0,kenkou:-10,jinmyaku:-15}, nx:'END_akemi_drift'},
+    ]
+  },
+
+  's6_akemi_work': {
+    num:'6', title:'仕事と恋愛',
+    texts:[
+      {sp:'',tx:'たかは仕事に力を入れ始めた。成果が出た。昇格した。'},
+      {sp:'たか（心の声）',tx:'明美と過ごす時間は減ったが……仕方ない。'},
+      {sp:'明美',tx:'……最近、忙しそうだね。'},
+      {sp:'たか',tx:'ちょっとな。落ち着いたら埋め合わせするよ。'},
+      {sp:'明美',tx:'……そっか。'},
+      {sp:'たか（心の声）',tx:'その「そっか」が、少し気になった。'},
+      {sp:'',tx:'それから半年後——明美からLINEが来た。'},
+      {sp:'明美（メッセージ）',tx:'「話があるんだけど、会える？」'},
+    ],
+    choices:[
+      {tx:'「今すぐ行く」と仕事を切り上げる',      ef:{yuuki:+15,okane:-10,kenkou:+10,jinmyaku:+10}, nx:'END_akemi_choose'},
+      {tx:'「今日は無理、週末でいい？」と返す',    ef:{yuuki:-10,okane:+15,kenkou:-10,jinmyaku:-20}, nx:'END_akemi_work_over'},
+    ]
+  },
+
+  // ===== 舞子修復アーク =====
+  's7_counsel': {
+    num:'7', title:'カウンセリング',
+    texts:[
+      {sp:'',tx:'二人でカウンセリングに通い始めた。'},
+      {sp:'',tx:'最初は気まずかった。でも——少しずつ、話せるようになった。'},
+      {sp:'舞子',tx:'私……本当は、たかくんのことが好きだよ。なんであんなことしたんだろう。'},
+      {sp:'たか（心の声）',tx:'俺も、まだ好きだ。だからこそ、傷ついた。'},
+      {sp:'',tx:'3ヶ月後、カウンセラーが言った。'},
+      {sp:'カウンセラー',tx:'お二人は、ちゃんと向き合う力がある。あとは時間です。'},
+    ],
+    choices:[
+      {tx:'信じて、やり直す',                ef:{yuuki:+20,okane:-10,kenkou:+15,jinmyaku:+10}, nx:'END_maiko_renewal'},
+      {tx:'やっぱり信頼を取り戻せなかった',  ef:{yuuki:+5,okane:-5,kenkou:-10,jinmyaku:-5},   nx:'s_divorce_night'},
+    ]
+  },
+
+  // ===== 離婚後・旅アーク =====
+  's9_journey': {
+    num:'9', title:'旅',
+    texts:[
+      {sp:'',tx:'たかは荷物をまとめ、行き先を決めずに電車に乗った。'},
+      {sp:'たか（心の声）',tx:'どこでもいい。ここじゃないところへ行きたかった。'},
+      {sp:'',tx:'降り立ったのは、見知らぬ地方の駅だった。\n小さな食堂に入った。'},
+      {sp:'食堂の女将',tx:'あら、一人旅？　若いのに珍しいね。'},
+      {sp:'たか（心の声）',tx:'……ここには、俺を知っている人間が誰もいない。'},
+      {sp:'',tx:'その解放感が、久しぶりに胸に広がった。'},
+    ],
+    choices:[
+      {tx:'しばらくここに留まる',              ef:{yuuki:+10,okane:-20,kenkou:+20,jinmyaku:+5},  nx:'s9_journey_stay'},
+      {tx:'帰ろう。前に進まないといけない',    ef:{yuuki:+15,okane:-5,kenkou:+10,jinmyaku:0},   nx:'END_journey_reset'},
+    ]
+  },
+
+  's9_journey_stay': {
+    num:'9', title:'旅先',
+    texts:[
+      {sp:'',tx:'一週間が経った。'},
+      {sp:'食堂の女将',tx:'もう帰らないの？'},
+      {sp:'たか',tx:'……もう少しだけ。'},
+      {sp:'',tx:'ある夜、食堂でアルバイトをしている女性と話した。'},
+      {sp:'旅先の女性',tx:'ここに来る人って、たいてい何か抱えてるんですよね。'},
+      {sp:'たか（心の声）',tx:'……そうかもしれない。'},
+      {sp:'旅先の女性',tx:'でも、ちゃんと抱えて旅できる人は、きっと大丈夫ですよ。'},
+    ],
+    choices:[
+      {tx:'この人ともっと話したい',    ef:{yuuki:+10,okane:-10,kenkou:+10,jinmyaku:+15}, nx:'END_journey_new'},
+      {tx:'そろそろ帰る時間だ',        ef:{yuuki:+20,okane:-5,kenkou:+15,jinmyaku:+5},  nx:'END_journey_reset'},
+    ]
+  },
+
+  's6_marry': {
+    num:'6', title:'結婚',
+    texts:[
+      {sp:'',tx:'舞子は婚約者と別れた。そしてたかと正式に付き合いはじめた。'},
+      {sp:'',tx:'2年後、二人は結婚した。式は小さかったけれど、充実していた。'},
+      {sp:'舞子',tx:'たかくん、これからもよろしくね。'},
+      {sp:'たか',tx:'こちらこそ。ずっとよろしく。'},
+      {sp:'',tx:'新婚生活は穏やかだった。\n\n——半年が経った。'},
+    ],
+    choices:null, nx:'s7_affair'
+  },
+
+  's7_affair': {
+    num:'7', title:'不倫発覚',
+    texts:[
+      {sp:'',tx:'職場の同僚から、聞きたくない話を聞かされた。'},
+      {sp:'同僚（ひそひそ）',tx:'……たかの奥さんさ、高橋課長と……なんか怪しくない？'},
+      {sp:'たか（心の声）',tx:'ありえない。ありえないはずだ。'},
+      {sp:'',tx:'でも、確かめてしまった。舞子のスマホのトーク画面を。'},
+      {sp:'たか（心の声）',tx:'……本当だった。\n\n結婚してまだ半年。信じられない。'},
+    ],
+    choices:[
+      {tx:'舞子に直接ぶつけて、「許すから続けよう」と言う',  ef:{yuuki:-10,okane:+5,kenkou:-20,jinmyaku:-5}, nx:'s7_forgive'},
+      {tx:'問い詰めてすぐに離婚を切り出す',                  ef:{yuuki:+20,okane:-15,kenkou:-5,jinmyaku:0},   nx:'s_divorce_night'},
+      {tx:'誰にも言えない。一人で全部抱え込む',              ef:{yuuki:-15,okane:0,kenkou:-20,jinmyaku:-10},  nx:'s7_alone'},
+      {tx:'責める気になれない。体だけの関係を続ける',        ef:{yuuki:-10,okane:0,kenkou:-10,jinmyaku:-5},   nx:'s7_sefure_start'},
+    ]
+  },
+
+  's7_forgive': {
+    num:'7', title:'許す',
+    texts:[
+      {sp:'舞子',tx:'ごめん……本当にごめん。もうしない。あなたのそばにいたい。'},
+      {sp:'たか（心の声）',tx:'信じていいのか。でも……家もあるし、もう一度だけ。'},
+      {sp:'',tx:'それから半年後。また同じことが繰り返された。'},
+      {sp:'たか（心の声）',tx:'もう終わりにしないと、俺が壊れる。'},
+    ],
+    choices:[
+      {tx:'それでも……もう一度だけ信じる',   ef:{yuuki:-20,okane:0,kenkou:-25,jinmyaku:-10}, nx:'END_mako_suffer'},
+      {tx:'今度こそ離婚する',                 ef:{yuuki:+15,okane:-15,kenkou:+5,jinmyaku:0},  nx:'s_divorce_night'},
+      {tx:'二人でカウンセリングに行く',       ef:{yuuki:+10,okane:-15,kenkou:+5,jinmyaku:+5}, nx:'s7_counsel'},
+    ]
+  },
+
+  // ===== 狂人化ルート =====
+  's7_alone': {
+    num:'7', title:'孤独',
+    texts:[
+      {sp:'',tx:'誰にも言えなかった。'},
+      {sp:'',tx:'舞子の笑顔を見るたびに、あのトーク画面が浮かぶ。それでも普通にしていないといけない。'},
+      {sp:'たか（心の声）',tx:'普通に……普通に……。'},
+      {sp:'',tx:'睡眠が取れなくなった。食欲もなくなった。職場でミスが増えた。'},
+      {sp:'たか（心の声）',tx:'もう限界だ。でも誰にも言えない。この痛みは俺だけのものだ。'},
+    ],
+    choices:[
+      {tx:'なんとか持ちこたえる。心療内科に行く',       ef:{yuuki:+10,okane:-10,kenkou:+10,jinmyaku:0},   nx:'s_divorce_night'},
+      {tx:'もう誰かを傷つけてもいい気がしてきた',       ef:{yuuki:-20,okane:0,kenkou:-30,jinmyaku:-20},   nx:'s7_madness'},
+    ]
+  },
+
+  's7_madness': {
+    num:'7', title:'崩壊',
+    texts:[
+      {sp:'',tx:'何かが、切れた。'},
+      {sp:'たか（心の声）',tx:'俺は何のために……何のために……。'},
+      {sp:'',tx:'高橋課長の顔が頭から離れない。職場での笑顔。何も知らないような顔をして。'},
+      {sp:'たか（心の声）',tx:'全部壊してしまいたい。'},
+      {sp:'',tx:'理性の糸が、最後の一本になった。'},
+    ],
+    choices:[
+      {tx:'課長を殴った。気づいたら相手が倒れていた',   ef:{yuuki:-30,okane:-50,kenkou:-20,jinmyaku:-40}, nx:'END_violent'},
+      {tx:'自分を傷つけ始めた。止められなかった',       ef:{yuuki:-40,okane:-10,kenkou:-50,jinmyaku:-30}, nx:'END_insane'},
+    ]
+  },
+
+  // ===== セフレルート =====
+  's7_sefure_start': {
+    num:'7', title:'罪と欲',
+    texts:[
+      {sp:'たか（心の声）',tx:'……なんで、まだ好きなんだろう。'},
+      {sp:'',tx:'裏切られた。わかってる。でも体が言うことをきかなかった。'},
+      {sp:'舞子',tx:'……たか。こういう関係でいいの？'},
+      {sp:'たか',tx:'「いい」とは思ってない。でも……「やめろ」とも言えない。'},
+      {sp:'たか（心の声）',tx:'これはただの依存だ。わかってる。でも——。'},
+    ],
+    choices:[
+      {tx:'「本当はやり直したい」と正直に言う',         ef:{yuuki:+10,okane:0,kenkou:+5,jinmyaku:0},     nx:'END_maiko_renewal'},
+      {tx:'名前のない関係のまま続ける',                 ef:{yuuki:-10,okane:0,kenkou:-10,jinmyaku:-5},    nx:'s7_sefure_deep'},
+      {tx:'「これは間違いだ」と自分を律する',           ef:{yuuki:+15,okane:0,kenkou:+10,jinmyaku:0},    nx:'s8_divorce'},
+    ]
+  },
+
+  's7_sefure_deep': {
+    num:'7', title:'泥沼',
+    texts:[
+      {sp:'',tx:'それから数ヶ月が経った。'},
+      {sp:'',tx:'舞子とは「元夫婦」でも「恋人」でもない関係が続いた。'},
+      {sp:'たか（心の声）',tx:'これは何だ。俺は何をやってるんだ。'},
+      {sp:'',tx:'ある日、舞子が別の男の影を見せた。'},
+      {sp:'たか（心の声）',tx:'……嫉妬した。体が震えるくらい。こんな権利は俺にはないのに。'},
+    ],
+    choices:[
+      {tx:'嫉妬で頭が真っ白に。もう理性がない',         ef:{yuuki:-25,okane:0,kenkou:-25,jinmyaku:-20},  nx:'s7_madness'},
+      {tx:'「終わりにしよう」と自分を切り離す',         ef:{yuuki:+20,okane:0,kenkou:+5,jinmyaku:0},     nx:'s8_divorce'},
+      {tx:'このまま流されていく。名前のない関係のまま',  ef:{yuuki:-15,okane:0,kenkou:-10,jinmyaku:-10},  nx:'END_sefure'},
+    ]
+  },
+
+  's8_divorce': {
+    num:'8', title:'離婚',
+    texts:[
+      {sp:'',tx:'離婚が成立した。'},
+      {sp:'たか（心の声）',tx:'空っぽだ。結婚して、信じていた人に裏切られた。それだけのことが、こんなに重い。'},
+      {sp:'',tx:'そんな時、ハムから連絡が来た。'},
+      {sp:'ハム（メッセージ）',tx:'「久しぶり。飲もう。お前大丈夫か」'},
+      {sp:'たか（心の声）',tx:'こいつ……知ってたのか。何も言わずにいてくれてたのか。'},
+    ],
+    choices:[
+      {tx:'ハムと会って全部吐き出す',               ef:{yuuki:+10,okane:-5,kenkou:+10,jinmyaku:+15}, nx:'s9_hamu'},
+      {tx:'誰にも会いたくない。マチアプで気を紛らわす', ef:{yuuki:-5,okane:-20,kenkou:-10,jinmyaku:-5},  nx:'s9_app'},
+      {tx:'しばらく一人旅に出て、頭と心を整理する',   ef:{yuuki:+10,okane:-15,kenkou:+10,jinmyaku:0},  nx:'s9_journey'},
+    ]
+  },
+
+  's8_divorce_nohamu': {
+    num:'8', title:'離婚',
+    texts:[
+      {sp:'',tx:'離婚が成立した。'},
+      {sp:'たか（心の声）',tx:'空っぽだ。結婚して、信じていた人に裏切られた。それだけのことが、こんなに重い。'},
+      {sp:'たか（心の声）',tx:'……誰かに連絡したい。でも、誰に？'},
+      {sp:'たか（心の声）',tx:'ハム……あいつ、元気にしてるかな。あの頃、誘いを断ったきりだ。今さら連絡できる顔じゃない。'},
+      {sp:'たか（心の声）',tx:'……俺には、頼れる友達がいない。'},
+    ],
+    choices:[
+      {tx:'毎晩酒で紛らわす',                        ef:{yuuki:-5,okane:-5,kenkou:-10,jinmyaku:0},    nx:'s9_drink_alone'},
+      {tx:'マチアプで誰かを探す',                    ef:{yuuki:-3,okane:-10,kenkou:-5,jinmyaku:-3},   nx:'s9_loneliness_app'},
+      {tx:'しばらく一人旅に出て、頭と心を整理する',  ef:{yuuki:+10,okane:-15,kenkou:+10,jinmyaku:0},  nx:'s9_journey'},
+    ]
+  },
+
+  // ===== ハムなし 孤独・自暴自棄ルート（完全独立）=====
+  's9_drink_alone': {
+    num:'8', title:'一人の夜',
+    texts:[
+      {sp:'',tx:'離婚から一週間が経った。'},
+      {sp:'',tx:'たかは毎晩コンビニで酒を買い、部屋で一人飲んだ。'},
+      {sp:'',tx:'飲めば少しだけ、楽になった。翌朝はきつかったが、夜になるとまた飲んだ。'},
+      {sp:'たか（心の声）',tx:'……これって普通じゃないよな。'},
+      {sp:'たか（心の声）',tx:'でも、やめる理由もない。'},
+    ],
+    choices:[
+      {tx:'このまま飲み続ける。考えなくていい',   ef:{yuuki:-10,okane:-5,kenkou:-15,jinmyaku:0},  nx:'s9_drink_deep'},
+      {tx:'体が心配だ。どこかで踏みとどまる',     ef:{yuuki:+5,okane:0,kenkou:0,jinmyaku:0},      nx:'s_nohamu_rebuild'},
+    ]
+  },
+
+  's9_drink_deep': {
+    num:'8', title:'沈んでいく',
+    texts:[
+      {sp:'',tx:'二ヶ月が経った。'},
+      {sp:'',tx:'仕事は続けていたが、帰宅して飲まないことがなくなった。週末は昼から飲んだ。'},
+      {sp:'',tx:'体重が落ちた。顔色が悪いと同僚に言われた。'},
+      {sp:'たか（心の声）',tx:'わかってる。でも……止まれない。'},
+      {sp:'',tx:'ある夜、鏡の前に立ったら、自分がよくわからなくなった。'},
+    ],
+    choices:[
+      {tx:'もうどうでもいい。このまま沈んでいく',  ef:{yuuki:-15,okane:0,kenkou:-15,jinmyaku:0},  nx:'s9_bottom'},
+      {tx:'このままじゃまずい。何かしないと',      ef:{yuuki:+5,okane:0,kenkou:-10,jinmyaku:0},   nx:'s_nohamu_rebuild'},
+    ]
+  },
+
+  's9_bottom': {
+    num:'8', title:'底',
+    texts:[
+      {sp:'',tx:'ある朝、起き上がれなかった。'},
+      {sp:'',tx:'会社に電話して、そのまま布団に戻った。'},
+      {sp:'たか（心の声）',tx:'……誰かに連絡したい。でも、誰もいない。'},
+      {sp:'',tx:'親に電話しようとして、やめた。'},
+      {sp:'たか（心の声）',tx:'ハムのことを思い出した。あの時、一緒に飯を食っていたら——。'},
+      {sp:'たか（心の声）',tx:'考えても仕方ない。でも、頭から離れない。'},
+    ],
+    choices:[
+      {tx:'誰でもいい。助けを求める',              ef:{yuuki:+15,okane:0,kenkou:0,jinmyaku:0},    nx:'END_nohamu_recover'},
+      {tx:'このまま消えてしまいたい',              ef:{yuuki:-20,okane:0,kenkou:-20,jinmyaku:0},   nx:'END_nohamu_collapse'},
+    ]
+  },
+
+  's9_loneliness_app': {
+    num:'8', title:'マッチングアプリ',
+    texts:[
+      {sp:'',tx:'マチアプを入れた。'},
+      {sp:'',tx:'一週間で何人かと会った。楽しかったわけじゃない。誰かの声が聞きたかっただけだった。'},
+      {sp:'たか（心の声）',tx:'……これは、寂しさを誤魔化してるだけだ。'},
+      {sp:'',tx:'三人目の相手との帰り道、たかは急に涙が出そうになった。'},
+    ],
+    choices:[
+      {tx:'それでも続ける。止まるのが怖い',        ef:{yuuki:-5,okane:-10,kenkou:-5,jinmyaku:0},   nx:'s9_drink_alone'},
+      {tx:'やめる。こんな形じゃない',              ef:{yuuki:+5,okane:0,kenkou:0,jinmyaku:0},      nx:'s_nohamu_rebuild'},
+    ]
+  },
+
+  's_nohamu_rebuild': {
+    num:'9', title:'立て直す',
+    texts:[
+      {sp:'',tx:'たかは少しずつ、生活を整えていった。'},
+      {sp:'',tx:'飲みすぎをやめ、規則正しく起きた。ランニングを始めた。最初は三分で止まった。'},
+      {sp:'たか（心の声）',tx:'友達がいれば、もっと楽だったかもしれない。でも……自分でやるしかない。'},
+      {sp:'',tx:'半年後。たかは前より少しだけ、静かになっていた。'},
+      {sp:'たか（心の声）',tx:'誰かに頼れないと、自分が自分の一番の味方になるしかない——そう気づいた。'},
+    ],
+    choices:[
+      {tx:'このまま一人で生きていく',              ef:{yuuki:+10,okane:+5,kenkou:+10,jinmyaku:0},  nx:'END_nohamu_solo'},
+      {tx:'心療内科に行って、ちゃんと整理する',    ef:{yuuki:+15,okane:-5,kenkou:+15,jinmyaku:0},  nx:'END_nohamu_recover'},
+    ]
+  },
+
+  // ===== ハム出会い（既存） =====
+  's9_hamu': {
+    num:'8', title:'ハム',
+    texts:[
+      {sp:'',tx:'ハムとは夜中まで飲んだ。離婚のこと、しののこと、全部話した。'},
+      {sp:'ハム',tx:'……お前、よく立ってるよ。俺だったら折れてた。'},
+      {sp:'たか',tx:'折れてるよ。ただ倒れてないだけ。'},
+      {sp:'ハム',tx:'それでいい。倒れなければ前に進める。'},
+      {sp:'',tx:'ハムがいる限り、大丈夫だとたかは思った。'},
+    ],
+    choices:null, nx:'s10_aki_intro'
+  },
+
+  's9_app': {
+    num:'8', title:'',
+    texts:[
+      {sp:'',tx:'誰にも会いたくなかった。でも一人でいるのも限界だった。'},
+      {sp:'たか（心の声）',tx:'……何か、気を紛らわすものが欲しい。'},
+    ],
+    choices:null, nx:'s10_aki_intro'
+  },
+
+  's10_aki_intro': {
+    num:'9', title:'アキ',
+    texts:[
+      {sp:'',tx:'離婚してから数ヶ月が経った頃、たかは少しずつ変わっていった。'},
+      {sp:'',tx:'ある夜、ふと検索したのがデリヘルだった。\n深い意味はなかった。ただ、誰かのぬくもりが欲しかっただけだ。'},
+      {sp:'',tx:'そこで知り合ったのが、アキだった。'},
+      {sp:'アキ',tx:'お客さん、なんか雰囲気暗いですね。何かあったんですか？'},
+      {sp:'たか（心の声）',tx:'仕事で来てるのに、こっちが気遣われてる。'},
+      {sp:'アキ',tx:'言いたくなかったら全然いいんですけど。なんか……つらそうで。'},
+      {sp:'',tx:'アキは話を聞くのが上手だった。気づいたらたかは離婚のことを話していた。'},
+      {sp:'アキ',tx:'そうか……それは大変でしたね。'},
+      {sp:'たか（心の声）',tx:'こんな場所で、こんな話をするとは思ってなかった。'},
+    ],
+    choices:[
+      {tx:'アキにLINEを聞いて連絡を続ける',      ef:{yuuki:+5,okane:-10,kenkou:+5,jinmyaku:+5},  nx:'s10_aki_deep'},
+      {tx:'割り切る。マチアプも試してみることにする', ef:{yuuki:+5,okane:-5,kenkou:+5,jinmyaku:0}, nx:'s10_maki_intro'},
+      {tx:'新しい趣味やサークルで人と繋がることにする', ef:{yuuki:+10,okane:-5,kenkou:+10,jinmyaku:+10}, nx:'s10_maki_intro'},
+    ]
+  },
+
+  's10_aki_deep': {
+    num:'9', title:'アキ',
+    texts:[
+      {sp:'',tx:'アキとは何度か会った。仕事外でも会うようになった。'},
+      {sp:'アキ',tx:'私のこと、好きなんですか？'},
+      {sp:'たか',tx:'……わからない。でも会いたいとは思う。'},
+      {sp:'アキ',tx:'正直な人ですね（笑）。私もたかさんのこと、嫌いじゃないです。でも……私仕事があるから。'},
+      {sp:'たか（心の声）',tx:'そうだよな。この関係に何を求めてたんだろう。'},
+      {sp:'',tx:'アキとはそれからもたまに会った。でも「付き合う」という形にはならなかった。'},
+      {sp:'たか（心の声）',tx:'何か物足りない。もっとちゃんとした関係が、欲しいのかもしれない。'},
+    ],
+    choices:[
+      {tx:'マチアプで本当の出会いを探してみる',       ef:{yuuki:+5,okane:-5,kenkou:0,jinmyaku:+5},   nx:'s10_maki_intro'},
+      {tx:'アキに本気の気持ちを打ち明ける',           ef:{yuuki:+15,okane:0,kenkou:+5,jinmyaku:+5},  nx:'s10_aki_serious'},
+      {tx:'アキとの関係を整理して、前に進む決意をする', ef:{yuuki:+15,okane:0,kenkou:+5,jinmyaku:0},  nx:'s10_maki_intro'},
+    ]
+  },
+
+  's10_aki_serious': {
+    num:'9', title:'本気',
+    texts:[
+      {sp:'たか',tx:'アキさん、俺……本気なんだと思う。'},
+      {sp:'アキ',tx:'……え。'},
+      {sp:'たか',tx:'冗談じゃない。この気持ち、どうすればいいかわからないけど。'},
+      {sp:'アキ',tx:'……たかさん。私、仕事してるから。お客さんに本気になってほしくないんです。'},
+      {sp:'たか（心の声）',tx:'わかってる。でも……。'},
+      {sp:'アキ',tx:'……でも、私も。たかさんのこと、考えてた。'},
+      {sp:'アキ',tx:'仕事なのに、次来るのが楽しみで。それって、ダメだよね。'},
+    ],
+    choices:[
+      {tx:'「一度だけ、仕事じゃない場所で会ってほしい」', ef:{yuuki:+20,okane:-5,kenkou:+10,jinmyaku:+10}, nx:'END_aki_real'},
+      {tx:'「お互い、ちゃんと向き合おう」と真剣に言う',  ef:{yuuki:+15,okane:0,kenkou:+10,jinmyaku:+10}, nx:'END_aki_real'},
+      {tx:'「ごめん、言うべきじゃなかった」と引く',     ef:{yuuki:-5,okane:0,kenkou:-10,jinmyaku:-5},   nx:'s10_maki_intro'},
+    ]
+  },
+
+  's10_maki_intro': {
+    num:'10', title:'マチアプ',
+    texts:[
+      {sp:'',tx:'マッチングアプリを入れた。最初は気恥ずかしかったが、すぐに慣れた。'},
+      {sp:'',tx:'何人かとメッセージして、何人かと実際に会った。'},
+      {sp:'たか（心の声）',tx:'……なんか消耗するな。これが現代の出会いか。'},
+      {sp:'',tx:'そんな中で、マキからメッセージが来た。'},
+      {sp:'マキ（アプリ）',tx:'プロフィール読んだんですけど、なんか話しやすそうで。よかったら話しましょ。'},
+      {sp:'たか（心の声）',tx:'……なんか他の子と違う雰囲気だな。'},
+    ],
+    choices:null, nx:'s10_maki'
+  },
+
+  's10_maki': {
+    num:'10', title:'マキ',
+    texts:[
+      {sp:'',tx:'初めて会ったのはカフェだった。'},
+      {sp:'マキ',tx:'たかさん、思ったより落ち着いてますね。'},
+      {sp:'たか',tx:'そうか？緊張してるけど。'},
+      {sp:'マキ',tx:'嘘だ（笑）。……なんか、ちゃんと話聞いてくれそうな人って感じがして、メッセージしたんです。'},
+      {sp:'たか（心の声）',tx:'……悪くない。'},
+      {sp:'',tx:'それから何度か会った。マキは少し変わった雰囲気があったが、それが気になった。'},
+      {sp:'',tx:'付き合い始めてしばらくすると、マキの精神疾患が顕在化した。過呼吸、解離、薬の服用。'},
+      {sp:'たか（心の声）',tx:'相性はいい。でも……これは重い。'},
+    ],
+    choices:[
+      {tx:'「俺が全力で支える」と本気で向き合う',   ef:{yuuki:+10,okane:-5,kenkou:-15,jinmyaku:+5}, nx:'s10_maki_s'},
+      {tx:'割り切って接するが、関係は浅く保つ',     ef:{yuuki:0,okane:0,kenkou:0,jinmyaku:0},       nx:'s11_R'},
+      {tx:'まず二人でお互いの不安を話し合う場を作る', ef:{yuuki:+10,okane:0,kenkou:0,jinmyaku:+5},   nx:'s10_maki_s'},
+    ]
+  },
+
+  's10_maki_s': {
+    num:'9', title:'マキと向き合う',
+    texts:[
+      {sp:'',tx:'1年間、マキと向き合い続けた。救急に付き添ったこともある。泣きながら謝るマキをなだめた夜もある。'},
+      {sp:'マキ',tx:'ごめんね、こんな私と付き合わせて。普通の彼女じゃなくて……。'},
+      {sp:'たか',tx:'普通ってなんだよ。俺はお前のことが好きだから一緒にいる。それだけだ。'},
+      {sp:'たか（心の声）',tx:'でも……俺自身が限界に近い気がする。'},
+    ],
+    choices:[
+      {tx:'それでも添い遂げると決める。マキと生きていく',    ef:{yuuki:+15,okane:-15,kenkou:-20,jinmyaku:0},  nx:'END_maki'},
+      {tx:'「俺には支えきれない」と正直に話して別れる',      ef:{yuuki:+10,okane:0,kenkou:+15,jinmyaku:-5},  nx:'s_bye_maki'},
+      {tx:'専門家（カウンセラー・担当医）を一緒に探してチームで支える', ef:{yuuki:+10,okane:-10,kenkou:-5,jinmyaku:+10}, nx:'END_maki'},
+    ]
+  },
+
+  's11_R': {
+    num:'10', title:'R',
+    texts:[
+      {sp:'',tx:'しばらくして、Rと出会った。'},
+      {sp:'',tx:'Rは魅力的な女性だったが、付き合い始めてすぐに気づいた。'},
+      {sp:'R',tx:'たか、昨日の夜11時以降連絡なかったけどどこにいたの。'},
+      {sp:'たか（心の声）',tx:'ハムと飲んでただけだぞ……。'},
+      {sp:'R',tx:'男友達でしょ。なんで教えてくれないの。私のこと信用してないってこと？'},
+      {sp:'たか（心の声）',tx:'管理されてる感じがする。でも、これが愛情の形の一つなのか？'},
+    ],
+    choices:[
+      {tx:'「わかった、ちゃんと報告する」と受け入れる',      ef:{yuuki:-10,okane:0,kenkou:-5,jinmyaku:-5}, nx:'s12_control'},
+      {tx:'「俺には俺の友達がいる」とはっきり言う',          ef:{yuuki:+15,okane:0,kenkou:0,jinmyaku:+5},  nx:'s12_resist'},
+      {tx:'Rが不安を感じる理由を正直に聞いてみる',           ef:{yuuki:+5,okane:0,kenkou:+5,jinmyaku:+5},  nx:'s12_resist_talk'},
+    ]
+  },
+
+  's12_control': {
+    num:'11', title:'束縛',
+    texts:[
+      {sp:'',tx:'Rの要求は徐々にエスカレートした。ハムと会う回数が減り、やがてRは「ハムと会うのをやめてほしい」と言い出した。'},
+      {sp:'R',tx:'ハムって人、たかのことを変な方向に引っ張るでしょ。あの人と会ってると不安なんだけど。'},
+      {sp:'たか（心の声）',tx:'ハムは俺の友達だ。でも……Rを悲しませたくもない。'},
+    ],
+    choices:[
+      {tx:'Rを優先してハムと距離を置く',        ef:{yuuki:-15,okane:0,kenkou:-5,jinmyaku:-20}, nx:'s12_cut_hamu'},
+      {tx:'こっそりハムと会い続ける',            ef:{yuuki:-5,okane:0,kenkou:0,jinmyaku:+5},   nx:'s12_sneak'},
+      {tx:'RにRの不安や過去を話してもらう機会を作る', ef:{yuuki:+5,okane:0,kenkou:0,jinmyaku:+5}, nx:'s12_resist_talk'},
+    ]
+  },
+
+  's12_cut_hamu': {
+    num:'11', title:'',
+    texts:[
+      {sp:'',tx:'ハムへの連絡が減り、やがて完全に途絶えた。'},
+      {sp:'ハム（最後のメッセージ）',tx:'「お前最近連絡くれへんな。まあ、元気ならいいけど」'},
+      {sp:'たか（心の声）',tx:'……返せなかった。Rに見られるのが怖くて。'},
+    ],
+    choices:null, nx:'s_isolation_spiral'
+  },
+
+  's_isolation_spiral': {
+    num:'11', title:'孤立の果て',
+    texts:[
+      {sp:'',tx:'それからRとも関係が崩れていった。'},
+      {sp:'',tx:'仕事でも失敗が続いた。上司に怒鳴られ、後輩にも追い越された。'},
+      {sp:'たか（心の声）',tx:'……誰もいない。本当に誰も。'},
+      {sp:'',tx:'眠れない夜が続いた。ある日、たかは会社を無断欠勤した。'},
+      {sp:'たか（心の声）',tx:'なんでこうなったんだろう。俺の人生、どこで間違えたんだ。'},
+    ],
+    choices:[
+      {tx:'誰かに助けを求める。実家に電話してみる',     ef:{yuuki:+10,okane:0,kenkou:+10,jinmyaku:+10}, nx:'END_isolated'},
+      {tx:'全部終わりにしたい……そんな気持ちが浮かんだ', ef:{yuuki:-25,okane:0,kenkou:-25,jinmyaku:-25}, nx:'s_death_edge'},
+      {tx:'とにかく今夜だけは飯を食う。それだけ',        ef:{yuuki:+5,okane:-5,kenkou:+5,jinmyaku:0},   nx:'END_isolated'},
+    ]
+  },
+
+  's_death_edge': {
+    num:'11', title:'',
+    texts:[
+      {sp:'',tx:'たかはふらふらと夜の街を歩き続けた。'},
+      {sp:'',tx:'川沿いに出た。水面が街の灯りを反射していた。'},
+      {sp:'たか（心の声）',tx:'眠れたら……楽になれるか。'},
+      {sp:'',tx:'その時、スマホが鳴った。'},
+      {sp:'',tx:'ハムからだった。'},
+      {sp:'ハム（メッセージ）',tx:'「お前、最近どうした。心配してる。連絡くれ」'},
+      {sp:'たか（心の声）',tx:'……ハム。'},
+    ],
+    choices:[
+      {tx:'メッセージを無視して、その場に留まり続ける',  ef:{yuuki:-30,okane:0,kenkou:-30,jinmyaku:-30}, nx:'END_death'},
+      {tx:'「……生きてる」とだけ返信する',              ef:{yuuki:+20,okane:0,kenkou:+10,jinmyaku:+20}, nx:'END_isolated'},
+      {tx:'電話をかける。声が、聞きたかった',            ef:{yuuki:+15,okane:0,kenkou:+15,jinmyaku:+20}, nx:'END_isolated'},
+    ]
+  },
+
+  's12_sneak': {
+    num:'11', title:'',
+    texts:[
+      {sp:'',tx:'こっそりハムと飲んだ帰り、Rから電話が来た。'},
+      {sp:'R',tx:'ハムと会ってたでしょ。位置情報見たんだけど。なんで嘘ついたの。'},
+      {sp:'たか（心の声）',tx:'位置情報……そんなの見てたのか。'},
+    ],
+    choices:[
+      {tx:'正直に謝る。「悪かった、ちゃんと話す」',    ef:{yuuki:+10,okane:0,kenkou:0,jinmyaku:+5},  nx:'s13_R_talk'},
+      {tx:'「俺の友人に口出しするな」と口論になる',    ef:{yuuki:+5,okane:0,kenkou:-5,jinmyaku:0},   nx:'s13_R_break'},
+      {tx:'この機会にRとハムを引き合わせて誤解を解く', ef:{yuuki:+10,okane:-5,kenkou:0,jinmyaku:+10}, nx:'s13_R_talk'},
+    ]
+  },
+
+  's12_resist': {
+    num:'11', title:'主張する',
+    texts:[
+      {sp:'R',tx:'ハムとの方が大事ってこと？私よりそっちが大事なの？'},
+      {sp:'たか',tx:'そういう話じゃない。友達と恋人は別の話だろ。'},
+      {sp:'R',tx:'じゃあ私と会う時間減らしてもいいって言うの？'},
+      {sp:'たか（心の声）',tx:'……話が通じない。でもRのことが嫌いなわけじゃない。'},
+      {sp:'',tx:'ハムは状況を察していた。'},
+      {sp:'ハム',tx:'あのさ、たか。正直に言うけど……あの子やばいと思う。お前に合ってない。'},
+    ],
+    choices:[
+      {tx:'ハムの言葉を受け止めてRと真剣に話し合う',     ef:{yuuki:+10,okane:0,kenkou:0,jinmyaku:+5},  nx:'s12_resist_talk'},
+      {tx:'ハムに「余計なお世話だ」と怒鳴ってしまう',    ef:{yuuki:-5,okane:0,kenkou:-5,jinmyaku:-15}, nx:'s12_fight'},
+      {tx:'ハムにもRにも、自分の気持ちを正直に話す',     ef:{yuuki:+15,okane:0,kenkou:+5,jinmyaku:+5}, nx:'s12_resist_talk'},
+    ]
+  },
+
+  's12_resist_talk': {
+    num:'11', title:'',
+    texts:[
+      {sp:'たか',tx:'R、俺は友達と連絡取ることをやめるつもりはない。それが無理なら俺たちは難しい。'},
+      {sp:'R',tx:'……そんなこと言われると思わなかった。'},
+      {sp:'',tx:'その夜、二人は長い時間話した。RはRなりに怖かったのだと、ぽつりと話した。'},
+      {sp:'R',tx:'私……昔、好きな人に捨てられたから。また同じになるのが怖くて。'},
+      {sp:'たか（心の声）',tx:'そういうことか。俺も似たような経験をしてきた。'},
+    ],
+    choices:null, nx:'s13_R_talk'
+  },
+
+  's12_fight': {
+    num:'11', title:'喧嘩',
+    texts:[
+      {sp:'ハム',tx:'……余計なお世話？俺がどれだけお前のこと心配してたと思ってんだ。'},
+      {sp:'たか',tx:'わかってる。でも俺の話だろ。関係ない。'},
+      {sp:'ハム',tx:'関係ないわけあるか。お前がボロボロになってくのを黙って見てろってか。'},
+      {sp:'',tx:'ハムは立ち上がった。たかも立ち上がった。'},
+      {sp:'ハム',tx:'……殴っていいぞ。それで俺のことが邪魔に思えるなら。'},
+    ],
+    choices:[
+      {tx:'ハムを殴る',                             ef:{yuuki:-10,okane:0,kenkou:-10,jinmyaku:-25}, nx:'s12_brutal'},
+      {tx:'……拳を止める。「ごめん」と言う',         ef:{yuuki:+15,okane:0,kenkou:0,jinmyaku:+10},  nx:'s12_stop'},
+      {tx:'「……ありがとう」と言う。それしか言えなかった', ef:{yuuki:+20,okane:0,kenkou:0,jinmyaku:+5}, nx:'s12_stop'},
+    ]
+  },
+
+  's12_brutal': {
+    num:'11', title:'殴り合い',
+    texts:[
+      {sp:'',tx:'たかの拳がハムの顔に入った。ハムも殴り返した。'},
+      {sp:'',tx:'二人は路上で殴り合った。近所から誰かが出てきて止めるまで、止まらなかった。'},
+      {sp:'ハム（血を拭きながら）',tx:'お前……本当にそれでいいのか。'},
+      {sp:'たか（心の声）',tx:'……よくない。全然よくない。でも今は何も言えない。'},
+    ],
+    choices:[
+      {tx:'その場を去る。縁が切れてもしょうがない',          ef:{yuuki:-15,okane:0,kenkou:-5,jinmyaku:-30}, nx:'END_hamu_break'},
+      {tx:'立ち止まる。「……俺、間違ってたかもしれない」',   ef:{yuuki:+20,okane:0,kenkou:-10,jinmyaku:+10}, nx:'END_hamu_friend'},
+      {tx:'「……俺が悪かった」と泣きながら謝る',           ef:{yuuki:+5,okane:0,kenkou:0,jinmyaku:+10},  nx:'END_hamu_friend'},
+    ]
+  },
+
+  's12_stop': {
+    num:'12', title:'和解',
+    texts:[
+      {sp:'ハム',tx:'……お前、泣いてんじゃん。'},
+      {sp:'たか',tx:'泣いてない。目に何か入った。'},
+      {sp:'ハム',tx:'バカ野郎。泣いていいんだよ。お前ずっと頑張りすぎてんだろ。'},
+      {sp:'',tx:'二人はそのまま公園のベンチに座って、夜中まで話した。'},
+      {sp:'ハム',tx:'Rのこと、嫌いじゃないけど……お前には合ってないと思う。それだけ。'},
+    ],
+    choices:null, nx:'s13_R_talk'
+  },
+
+  's13_R_talk': {
+    num:'12', title:'向き合う',
+    texts:[
+      {sp:'',tx:'RとはRで、ちゃんと向き合った。'},
+      {sp:'R',tx:'……私、変わりたい。変わってみせる。'},
+      {sp:'たか',tx:'じゃあ、もう一度だけ信じる。でも俺の友達を縛るのはやめてくれ。'},
+      {sp:'',tx:'RはRなりに努力した。束縛は少しずつ薄れていった。'},
+      {sp:'',tx:'1年後、たかはRにプロポーズした。'},
+    ],
+    choices:null, nx:'s14_marry_R'
+  },
+
+  's13_R_break': {
+    num:'12', title:'別れ',
+    texts:[
+      {sp:'',tx:'その夜の口論は収まらなかった。翌日、Rから別れを切り出された。'},
+      {sp:'R',tx:'たかはたかのやりたいようにすればいい。私はもういい。'},
+      {sp:'たか（心の声）',tx:'……そうか。これで終わりか。'},
+    ],
+    choices:null, nx:'s_bye_R'
+  },
+
+  's14_marry_R': {
+    num:'13', title:'結婚',
+    texts:[
+      {sp:'',tx:'たかとRは結婚した。'},
+      {sp:'',tx:'結婚を機に、たかはハムに連絡した。'},
+      {sp:'たか（メッセージ）',tx:'「Rと結婚した。お前に謝りたいことがある。飲もう」'},
+      {sp:'ハム（返信）',tx:'「遅え。でも行く」'},
+      {sp:'',tx:'久しぶりに会ったハムは、全然変わっていなかった。'},
+      {sp:'ハム',tx:'Rさん、改めてよろしくな。でもたかのこと縛りすぎたら俺が怒鳴り込むから。'},
+      {sp:'R（笑って）',tx:'わかりました……よろしくお願いします。'},
+      {sp:'',tx:'たかは、今日が人生の一つの答えだと思った。'},
+    ],
+    choices:null, nx:'END_main'
+  },
+
+  // ===== 突発フラグ：過去キャラからの割り込みシーン =====
+
+  'int_shino': {
+    num:'INT', title:'突然のメッセージ',
+    texts:[
+      {sp:'',tx:'マッチングアプリを開こうとしたとき、知らない番号からショートメッセージが届いた。'},
+      {sp:'しの（メッセージ）',tx:'「たか。元気？　私、出所したよ。ちゃんとやり直してる」'},
+      {sp:'たか（心の声）',tx:'……しの。'},
+      {sp:'しの（メッセージ）',tx:'「突然ごめんね。ただ伝えたかっただけ。もう連絡しない」'},
+    ],
+    choices:[
+      {tx:'「元気でよかった。頑張って」と返す',         ef:{yuuki:+5,okane:0,kenkou:+5,jinmyaku:+5},  nx:'int_shino_reply'},
+      {tx:'「また話せたら嬉しい」と正直に送る',          ef:{yuuki:+10,okane:0,kenkou:0,jinmyaku:+5},  nx:'int_shino_reply'},
+      {tx:'既読のまま、スマホをそっと閉じる',            ef:{yuuki:0,okane:0,kenkou:-5,jinmyaku:0},    nx:'s10_maki_intro'},
+    ]
+  },
+  'int_shino_reply': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'しの（メッセージ）',tx:'「……ありがとう。たかはやっぱりやさしいね」'},
+      {sp:'しの（メッセージ）',tx:'「私も前に進むよ。たかも幸せになってね」'},
+      {sp:'たか（心の声）',tx:'それで終わりだった——はずだった。'},
+    ],
+    choices:[
+      {tx:'「元気で」それだけ送って、スマホを閉じる',   ef:{yuuki:+5,okane:0,kenkou:+5,jinmyaku:0},  nx:'s10_maki_intro'},
+      {tx:'「もし良ければ……会えないか」と送ってみる',  ef:{yuuki:-5,okane:0,kenkou:-5,jinmyaku:+5}, nx:'int_shino_meet'},
+    ]
+  },
+
+  // ===== しのストーカールート =====
+  'int_shino_stalker': {
+    num:'INT', title:'影',
+    texts:[
+      {sp:'',tx:'舞子と話し合い、もう一度やり直すと決めた夜——。'},
+      {sp:'',tx:'帰り道、背後から声がした。'},
+      {sp:'しの',tx:'……たか。'},
+      {sp:'',tx:'振り返ると、しのが立っていた。'},
+      {sp:'しの',tx:'ずっと……見てたよ。なかなか話しかけられなくて。舞子さんと仲直りしたんだね。よかった……ね。'},
+      {sp:'たか（心の声）',tx:'（何日間、俺を見ていたんだ……？）'},
+    ],
+    choices:[
+      {tx:'「しの、それはストーカーだ。やめてくれ」と真顔で言う', ef:{yuuki:+5,okane:0,kenkou:+5,jinmyaku:-5},  nx:'int_shino_police'},
+      {tx:'「なんで……来たの？」と静かに聞く',                    ef:{yuuki:0,okane:0,kenkou:-5,jinmyaku:0},   nx:'int_shino_stalk_talk'},
+      {tx:'何も言わず立ち去ろうとする',                          ef:{yuuki:-5,okane:0,kenkou:-5,jinmyaku:-5},  nx:'int_shino_stalk_ignore'},
+    ]
+  },
+  'int_shino_police': {
+    num:'INT', title:'相談',
+    texts:[
+      {sp:'',tx:'翌日、警察に相談した。'},
+      {sp:'警察官',tx:'ストーカー規制法に抵触する可能性があります。相手に警告を行います。'},
+      {sp:'',tx:'数日後、しのから短いメッセージが届いた。'},
+      {sp:'しの（メッセージ）',tx:'「ごめんね。もうしない。元気で」'},
+      {sp:'たか（心の声）',tx:'それきり、しのは現れなくなった。'},
+    ],
+    choices:null, nx:'s7_forgive'
+  },
+  'int_shino_stalk_talk': {
+    num:'INT', title:'話し合い',
+    texts:[
+      {sp:'たか',tx:'しの……俺たちはもう終わってる。こういうのはよくない。'},
+      {sp:'しの',tx:'わかってる。でも……忘れられなかっただけ。'},
+      {sp:'たか',tx:'それは俺への思いじゃなくて、依存だよ。しのにはしの自身の人生がある。'},
+      {sp:'',tx:'しのの目が揺れた。'},
+    ],
+    choices:[
+      {tx:'「もう連絡しないでくれ」とはっきり伝える',       ef:{yuuki:+10,okane:0,kenkou:+5,jinmyaku:-5},  nx:'int_shino_goodbye'},
+      {tx:'「悩みがあるなら相談窓口がある」と教えてあげる', ef:{yuuki:+5,okane:0,kenkou:0,jinmyaku:+10},   nx:'END_shino_stalker_resolve'},
+      {tx:'「少し時間をくれ」とその場を去る',               ef:{yuuki:-5,okane:0,kenkou:-10,jinmyaku:0},   nx:'int_shino_stalk_deep'},
+    ]
+  },
+  'int_shino_goodbye': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'しの',tx:'……うん、わかった。'},
+      {sp:'',tx:'しのは一度だけ振り返り、それきり歩いて行った。'},
+      {sp:'たか（心の声）',tx:'引き留めたい気持ちもあった。でも、それは俺のエゴだ。'},
+      {sp:'たか（心の声）',tx:'あいつには、もっとまともな人間が必要だ。俺じゃない。'},
+    ],
+    choices:null, nx:'s7_forgive'
+  },
+  'int_shino_stalk_ignore': {
+    num:'INT', title:'追跡',
+    texts:[
+      {sp:'',tx:'たかは何も言わず歩き続けた。'},
+      {sp:'',tx:'しのは後をついてきた。50m——100m——。'},
+      {sp:'',tx:'家の近くまで来ても、しのはまだいた。'},
+      {sp:'たか（心の声）',tx:'（これは……本当にまずい）'},
+    ],
+    choices:[
+      {tx:'翌朝、警察に相談する',       ef:{yuuki:+5,okane:0,kenkou:0,jinmyaku:-5},  nx:'int_shino_police'},
+      {tx:'やっぱり話し合うことにする', ef:{yuuki:0,okane:0,kenkou:-5,jinmyaku:0},   nx:'int_shino_stalk_talk'},
+    ]
+  },
+  'int_shino_stalk_deep': {
+    num:'INT', title:'深夜',
+    texts:[
+      {sp:'',tx:'その夜、眠れなかった。'},
+      {sp:'たか（心の声）',tx:'俺はしのを利用したのかもしれない。あいつが壊れたのは、俺のせいか。'},
+      {sp:'',tx:'深夜、しのからメッセージが届いた。'},
+      {sp:'しの（メッセージ）',tx:'「また話せる？　一人でいるとどうにかなりそうで」'},
+    ],
+    choices:[
+      {tx:'「ダメだ」と返し、気持ちに蓋をする',   ef:{yuuki:+10,okane:0,kenkou:+5,jinmyaku:-5},  nx:'int_shino_goodbye'},
+      {tx:'「今から行く」と返してしまう',          ef:{yuuki:-15,okane:0,kenkou:-20,jinmyaku:+5}, nx:'END_shino_stalker_end'},
+    ]
+  },
+
+  'int_maiko': {
+    num:'INT', title:'突然の着信',
+    texts:[
+      {sp:'',tx:'Rと会う約束をしていた日の朝。見覚えのある番号から着信があった。'},
+      {sp:'舞子（メッセージ）',tx:'「たかくん、元気？　久しぶりにご飯でもどうかな、なんて」'},
+      {sp:'たか（心の声）',tx:'……舞子。なんで今。'},
+      {sp:'舞子（メッセージ）',tx:'「あのこと、ずっと後悔してるんだ。一度だけ話せたら」'},
+    ],
+    choices:[
+      {tx:'「会う気にはなれない」とはっきり断る',        ef:{yuuki:+10,okane:0,kenkou:0,jinmyaku:0},   nx:'s11_R'},
+      {tx:'「話だけなら」と会うことにする',              ef:{yuuki:0,okane:0,kenkou:-5,jinmyaku:0},    nx:'int_maiko_meet'},
+      {tx:'「元気でいてくれればいい」とだけ返す',        ef:{yuuki:+5,okane:0,kenkou:+5,jinmyaku:0},   nx:'s11_R'},
+    ]
+  },
+  'int_maiko_meet': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'舞子',tx:'来てくれてありがとう。……ちゃんと謝りたかったの。'},
+      {sp:'舞子',tx:'あのとき、たかくんのことだけは裏切っちゃいけなかった。本当に、ごめんなさい。'},
+      {sp:'たか（心の声）',tx:'何も変わらない。でも、この言葉だけは聞けてよかったかもしれない。'},
+      {sp:'舞子',tx:'……もう行くね。幸せになってよ、たかくん。'},
+    ],
+    choices:[
+      {tx:'「ありがとう。もう行く」と立ち上がる',        ef:{yuuki:+10,okane:0,kenkou:0,jinmyaku:0},  nx:'s11_R'},
+      {tx:'帰れなかった。昔の気持ちが戻ってきた',        ef:{yuuki:-10,okane:0,kenkou:-10,jinmyaku:0}, nx:'int_maiko_sex'},
+    ]
+  },
+
+  'int_aki': {
+    num:'INT', title:'夜のLINE',
+    texts:[
+      {sp:'',tx:'Rとの関係で消耗していたある夜、アキからLINEが届いた。'},
+      {sp:'アキ（メッセージ）',tx:'「たかさん、最近どうですか。なんか元気なさそうで気になってました」'},
+      {sp:'たか（心の声）',tx:'なんでわかるんだろう。'},
+      {sp:'アキ（メッセージ）',tx:'「会えなくても、声くらいは聞けますよ。よかったら電話して」'},
+    ],
+    choices:[
+      {tx:'電話する。声が聞きたかった',                  ef:{yuuki:+10,okane:-5,kenkou:+10,jinmyaku:+5},  nx:'int_aki_call'},
+      {tx:'「ありがとう。大丈夫」とだけ返す',            ef:{yuuki:+5,okane:0,kenkou:+5,jinmyaku:0},      nx:'s12_control'},
+      {tx:'既読スルー。自分で解決するしかない',          ef:{yuuki:0,okane:0,kenkou:-5,jinmyaku:0},       nx:'s12_control'},
+    ]
+  },
+  'int_aki_call': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'アキ',tx:'……声聞けてよかった。元気そうで安心した。'},
+      {sp:'たか',tx:'お前こそ元気か。'},
+      {sp:'アキ',tx:'私は相変わらずですよ（笑）。……でも、たかさんが頑張ってるのは伝わってる。'},
+      {sp:'たか（心の声）',tx:'何も解決しない。でも、誰かの声を聞いただけで——少し楽になった。'},
+    ],
+    choices:[
+      {tx:'「また話そう」と電話を切る',                  ef:{yuuki:+5,okane:0,kenkou:+5,jinmyaku:0},  nx:'s12_control'},
+      {tx:'「会いたい」と言ってしまった',                ef:{yuuki:-10,okane:-10,kenkou:0,jinmyaku:0}, nx:'int_aki_visit'},
+    ]
+  },
+
+  'int_maki': {
+    num:'INT', title:'結婚前夜のメッセージ',
+    texts:[
+      {sp:'',tx:'結婚式の前日。マキからメッセージが届いた。'},
+      {sp:'マキ（メッセージ）',tx:'「たかさん、結婚するって聞きました。……おめでとう」'},
+      {sp:'たか（心の声）',tx:'……なんで知ってるんだ。'},
+      {sp:'マキ（メッセージ）',tx:'「たかさんが幸せそうでよかった。私も、ちょっとずつ前に進んでます」'},
+      {sp:'マキ（メッセージ）',tx:'「助けてくれてありがとう。ずっと感謝してる」'},
+    ],
+    choices:[
+      {tx:'「君も幸せになってほしい」と送る',            ef:{yuuki:+10,okane:0,kenkou:+10,jinmyaku:+10}, nx:'s14_marry_R'},
+      {tx:'「ありがとう。元気でいてくれ」とだけ返す',    ef:{yuuki:+5,okane:0,kenkou:+5,jinmyaku:+5},   nx:'s14_marry_R'},
+      {tx:'胸が痛くて、返信できなかった',                ef:{yuuki:-5,okane:0,kenkou:-5,jinmyaku:0},     nx:'s14_marry_R'},
+      {tx:'会いに行く。最後に一度だけ顔が見たかった',    ef:{yuuki:-10,okane:0,kenkou:-10,jinmyaku:-5}, nx:'int_maki_meet'},
+    ]
+  },
+
+  // ===== しのルート：再会・妊娠 =====
+  'int_shino_meet': {
+    num:'INT', title:'再会',
+    texts:[
+      {sp:'',tx:'しのとは、駅前のカフェで会った。'},
+      {sp:'',tx:'変わっていた。目が澄んでいて、少し落ち着いた雰囲気になっていた。'},
+      {sp:'しの',tx:'……ずいぶん久しぶりだね。来てくれると思わなかった。'},
+      {sp:'',tx:'話し始めると止まらなかった。昔のこと、今のこと——気づいたら深夜になっていた。'},
+      {sp:'たか（心の声）',tx:'やっぱり、この子のことが好きだったんだ。今でも。'},
+    ],
+    choices:[
+      {tx:'「もう帰る」とその場を切り上げる',           ef:{yuuki:+10,okane:0,kenkou:+5,jinmyaku:0},   nx:'s10_maki_intro'},
+      {tx:'流れに任せた。止められなかった',              ef:{yuuki:-10,okane:0,kenkou:-10,jinmyaku:0},  nx:'int_shino_sex'},
+    ]
+  },
+  'int_shino_sex': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'',tx:'その夜のことは、朝になっても頭から離れなかった。'},
+      {sp:'たか（心の声）',tx:'……俺は何をやってるんだ。'},
+      {sp:'しの',tx:'ごめん。私が誘ったんだから、たかが気にすることじゃない。'},
+      {sp:'たか（心の声）',tx:'それが余計に、胸に刺さった。'},
+      {sp:'',tx:'しのとはその後、連絡が途絶えた。——三週間後。'},
+      {sp:'しの（電話）',tx:'「……たか。話があるんだけど。会えないかな」'},
+    ],
+    choices:null, nx:'int_shino_pregnant_call'
+  },
+  'int_shino_pregnant_call': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'',tx:'再び会ったしのは、表情が硬かった。'},
+      {sp:'しの',tx:'……できてた。たかの子だと思う。'},
+      {sp:'たか（心の声）',tx:'頭が真っ白になった。'},
+      {sp:'しの',tx:'産むかどうか、まだ決めてない。でも……一人で決めたくなかった。'},
+    ],
+    choices:[
+      {tx:'「産んでくれ。俺が責任を取る」',              ef:{yuuki:+15,okane:-10,kenkou:-5,jinmyaku:0},  nx:'int_shino_baby'},
+      {tx:'「お前の気持ちが全てだ。どちらでも支える」',  ef:{yuuki:+10,okane:-5,kenkou:0,jinmyaku:0},   nx:'int_shino_baby'},
+      {tx:'「……俺には、今の生活がある」と目を逸らす',   ef:{yuuki:-20,okane:0,kenkou:-15,jinmyaku:-15}, nx:'int_shino_abandon'},
+    ]
+  },
+  'int_shino_baby': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'しの',tx:'……ありがとう。一人じゃないって、それだけで。'},
+      {sp:'',tx:'マッチングアプリのことも、Rのことも、全部どうでもよくなった。'},
+      {sp:'たか（心の声）',tx:'これが正しいのかはわからない。でも——逃げたくなかった。'},
+    ],
+    choices:null, nx:'END_shino_new_life'
+  },
+  'int_shino_abandon': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'しの',tx:'……そっか。'},
+      {sp:'',tx:'しのは何も言わなかった。泣かなかった。ただ、立ち上がって帰った。'},
+      {sp:'たか（心の声）',tx:'この瞬間のことは、ずっと忘れられないだろうと思った。'},
+    ],
+    choices:null, nx:'END_shino_chaos_two'
+  },
+
+  // ===== 舞子ルート：修羅場 =====
+  'int_maiko_sex': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'',tx:'気づいたら、朝だった。'},
+      {sp:'たか（心の声）',tx:'……何をしてるんだ、俺は。'},
+      {sp:'舞子',tx:'……ごめん。私が、たかくんを試してた。'},
+      {sp:'たか（心の声）',tx:'試した？　どういう意味だ。'},
+      {sp:'舞子',tx:'……まだ私のことが好きか、確かめたかった。最低だよね、私。'},
+      {sp:'',tx:'数日後、RがたかのLINEを見た。'},
+    ],
+    choices:null, nx:'int_maiko_found'
+  },
+  'int_maiko_found': {
+    num:'INT', title:'修羅場',
+    texts:[
+      {sp:'R',tx:'たか……これ、どういうこと。舞子って元奥さんでしょ？'},
+      {sp:'たか（心の声）',tx:'終わった。全部終わった。'},
+      {sp:'R',tx:'私、何か悪いことした？　なんでこんなことするの……。'},
+      {sp:'',tx:'Rの目から、涙がこぼれた。怒鳴らなかった。それが一番辛かった。'},
+    ],
+    choices:[
+      {tx:'全部正直に話す。どんな結末になっても',         ef:{yuuki:+15,okane:0,kenkou:-10,jinmyaku:-15}, nx:'END_maiko_chaos'},
+      {tx:'「もうしない」と誓って隠し通そうとする',        ef:{yuuki:-20,okane:0,kenkou:-20,jinmyaku:-20}, nx:'END_maiko_lie'},
+      {tx:'「Rと別れる」と決断する',                      ef:{yuuki:-5,okane:0,kenkou:-15,jinmyaku:-10},  nx:'int_R_stab'},
+    ]
+  },
+
+  'int_R_stab': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'たか',tx:'……R、俺たち別れよう。'},
+      {sp:'R',tx:'……え？'},
+      {sp:'たか',tx:'お前には、もっといい人間と一緒にいてほしい。俺には資格がない。'},
+      {sp:'R',tx:'……ふざけんな。'},
+      {sp:'R',tx:'ふざけんな！　今さら何それ！　捨てるってこと！？'},
+      {sp:'',tx:'Rの声が、裏返った。'},
+      {sp:'たか（心の声）',tx:'——目が、違う。'},
+      {sp:'',tx:'気づいた時には、腹に熱いものが走っていた。'},
+      {sp:'',tx:'Rが台所から持ってきたものを、たかはしばらく認識できなかった。'},
+      {sp:'たか（心の声）',tx:'……痛い。'},
+      {sp:'',tx:'床に倒れながら、たかはRの泣き声を遠くに聞いた。'},
+      {sp:'R',tx:'……なんで。なんでこうなるの……。'},
+    ],
+    choices:[
+      {tx:'「R……」と声を振り絞った',  ef:{yuuki:+10,okane:0,kenkou:-20,jinmyaku:0},  nx:'int_R_voice'},
+      {tx:'もう、声が出なかった',        ef:{yuuki:-10,okane:0,kenkou:-30,jinmyaku:-10}, nx:'END_R_dead'},
+    ]
+  },
+
+  'int_R_voice': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'R',tx:'……たか？　たか！　返事して！'},
+      {sp:'',tx:'Rは震える手でスマホを取り出し、119を押した。'},
+      {sp:'',tx:'救急車が来た。たかは一命をとりとめた。'},
+      {sp:'',tx:'——三週間後、Rが面会の申請をしてきた。'},
+      {sp:'たか（心の声）',tx:'会うべきか……。'},
+    ],
+    choices:[
+      {tx:'会う',    ef:{yuuki:+15,okane:0,kenkou:+5,jinmyaku:0},  nx:'int_R_meet'},
+      {tx:'会わない', ef:{yuuki:+5,okane:0,kenkou:+10,jinmyaku:0}, nx:'END_R_stab'},
+    ]
+  },
+
+  'int_R_meet': {
+    num:'INT', title:'面会',
+    texts:[
+      {sp:'',tx:'Rは、やつれていた。'},
+      {sp:'R',tx:'……来てくれると思わなかった。'},
+      {sp:'たか（心の声）',tx:'来なきゃよかったかもしれない。でも——来てしまった。'},
+      {sp:'R',tx:'あの夜のこと……ごめんなさい。どうしてああなったのか、自分でも。'},
+      {sp:'R',tx:'怖かったんだと思う。捨てられるのが。あなたしかいなかったから。'},
+      {sp:'たか（心の声）',tx:'それは言い訳だ。でも——嘘でもない気がした。'},
+    ],
+    choices:[
+      {tx:'「……わかった。全部忘れよう」と許す',   ef:{yuuki:+20,okane:0,kenkou:+10,jinmyaku:+5},  nx:'END_R_forgive'},
+      {tx:'「俺は裁判で証言する」と静かに言う',     ef:{yuuki:+25,okane:0,kenkou:0,jinmyaku:-10},   nx:'END_R_judge'},
+    ]
+  },
+
+  // ===== アキルート：妊娠 =====
+  'int_aki_visit': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'',tx:'アキは普通の顔で来た。仕事でもなく、ただ——来た。'},
+      {sp:'アキ',tx:'顔見たら、やっぱり元気なさそうで。'},
+      {sp:'たか（心の声）',tx:'こんな夜に呼んで、何がしたかったんだ、俺は。'},
+      {sp:'アキ',tx:'……私でよかったら、そばにいますよ。'},
+    ],
+    choices:[
+      {tx:'「いや、帰っていい。ありがとう」と断る',        ef:{yuuki:+10,okane:0,kenkou:+5,jinmyaku:0},   nx:'s12_control'},
+      {tx:'そばにいてもらった。一線を越えてしまった',      ef:{yuuki:-10,okane:-10,kenkou:0,jinmyaku:0},  nx:'int_aki_sex'},
+    ]
+  },
+  'int_aki_sex': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'',tx:'翌朝、アキは静かに身支度をして帰った。'},
+      {sp:'アキ',tx:'……たかさん、これは仕事じゃないから。わかってますよね。'},
+      {sp:'たか（心の声）',tx:'わかってる。だからこそ、重かった。'},
+      {sp:'',tx:'それから二ヶ月後、アキから連絡が来た。'},
+      {sp:'アキ（メッセージ）',tx:'「話があります。電話できますか」'},
+    ],
+    choices:null, nx:'int_aki_pregnant'
+  },
+  'int_aki_pregnant': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'アキ',tx:'……産もうと思ってる。'},
+      {sp:'たか（心の声）',tx:'え。'},
+      {sp:'アキ',tx:'一人で育てるつもりだから、たかさんに迷惑はかけない。でも、伝えたかった。'},
+      {sp:'たか（心の声）',tx:'迷惑とか、そういう話じゃない。'},
+    ],
+    choices:[
+      {tx:'「一緒に育てさせてほしい」と言う',              ef:{yuuki:+20,okane:-15,kenkou:-5,jinmyaku:+10}, nx:'END_aki_new'},
+      {tx:'「サポートはする」と約束する',                  ef:{yuuki:+10,okane:-10,kenkou:0,jinmyaku:+5},  nx:'END_aki_new'},
+      {tx:'「俺には今の生活がある」と言ってしまう',        ef:{yuuki:-15,okane:0,kenkou:-15,jinmyaku:-15}, nx:'END_aki_chaos'},
+    ]
+  },
+
+  // ===== マキルート：結婚前夜・死亡 =====
+  'int_maki_meet': {
+    num:'INT', title:'前夜の再会',
+    texts:[
+      {sp:'',tx:'式の前日の夜——たかはマキに会いに行ってしまった。'},
+      {sp:'マキ',tx:'……来ると思わなかった。'},
+      {sp:'たか（心の声）',tx:'俺もそう思ってた。でも足が動いた。'},
+      {sp:'マキ',tx:'Rさんのこと、好き？'},
+      {sp:'たか',tx:'……好きだ。'},
+      {sp:'マキ',tx:'そっか。ならよかった。……でも、今夜だけ、そばにいていい？'},
+    ],
+    choices:[
+      {tx:'「ごめん」と言って帰る',                       ef:{yuuki:+15,okane:0,kenkou:+5,jinmyaku:0},   nx:'s14_marry_R'},
+      {tx:'今夜だけ——その言葉に負けた',                   ef:{yuuki:-15,okane:0,kenkou:-15,jinmyaku:-10}, nx:'int_maki_sex'},
+    ]
+  },
+  'int_maki_sex': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'',tx:'翌朝、マキは泣いていた。'},
+      {sp:'マキ',tx:'……ごめん。私が悪かった。たかさんを困らせたかったわけじゃない。'},
+      {sp:'マキ',tx:'幸せになってね。ちゃんと——幸せになってよ。'},
+      {sp:'たか（心の声）',tx:'式当日、Rの顔を見た瞬間、胃がねじれた。'},
+      {sp:'',tx:'一週間後、マキの担当医から電話があった。'},
+      {sp:'医師',tx:'田中マキさんが……昨夜、自ら命を絶たれました。'},
+    ],
+    choices:null, nx:'int_maki_death_shock'
+  },
+  'int_maki_death_shock': {
+    num:'INT', title:'',
+    texts:[
+      {sp:'たか（心の声）',tx:'頭が、真っ白になった。'},
+      {sp:'たか（心の声）',tx:'あの朝「幸せになってね」と言ったのは……。'},
+      {sp:'',tx:'Rに話した。全部、正直に。'},
+      {sp:'R',tx:'……なんで話してくれたの。'},
+      {sp:'たか',tx:'隠せなかった。隠したくなかった。'},
+      {sp:'R',tx:'……私には、あなたのそんな気持ちを受け止める自信がない。'},
+    ],
+    choices:null, nx:'END_maki_death_end'
+  },
+
+};
+
+// ===== エンディングデータ =====
+const ENDINGS = {
+  'END_main': {
+    title:'メインエンド',
+    subtitle:'「それでも前を向いた男の話」',
+    color:'#f0c060',
+    text:'しのと、舞子と、マキと。たくさんの人と関わり、傷つき、時に間違いながら。\nRとの結婚という形で、たかはひとつの答えに辿り着いた。\n\nハムが隣にいた。それだけで、十分すぎた。',
+  },
+  'END_hamu_break': {
+    title:'ハム決裂エンド',
+    subtitle:'「一番大切なものを失った」',
+    color:'#cc3333',
+    text:'ハムとの縁は切れた。Rとの生活は続いたが、何かが欠けていた。\n心の底から話せる相手がいない。その空洞は埋まらなかった。\n\n「あの時、拳を止めればよかった」と気づいたのは、ずっと後のことだ。',
+  },
+  'END_hamu_friend': {
+    title:'殴り合い友情エンド',
+    subtitle:'「ぶつかって初めてわかること」',
+    color:'#ff8844',
+    text:'殴り合って、泣いて、罵倒して。それでも二人の友情は切れなかった。\nむしろあの夜以来、たかとハムの間にある壁がなくなった気がした。\n\n「本当の友達ってこういうことか」と、たかは思った。',
+  },
+  'END_mako_suffer': {
+    title:'舞子我慢エンド',
+    subtitle:'「許し続けた代償」',
+    color:'#8855bb',
+    text:'許すたびに、たかの何かが削られていった。\n最終的に選んだのは、自分を守ることだった。それは逃げじゃない。\n\n「もっと早く決断すればよかった」。それが唯一の後悔だ。',
+  },
+  'END_maki': {
+    title:'マキと結婚エンド',
+    subtitle:'「痛みを抱えて生きていく」',
+    color:'#44aacc',
+    text:'マキの病気はなくならない。でもたかはそれを知った上で選んだ。\n辛い夜もある。でも「俺がいる」と言える自分が、少しだけ誇らしかった。\n\n愛することは、きれいごとじゃない。それでいい。',
+  },
+  'END_shino': {
+    title:'しの庇い続けエンド',
+    subtitle:'「溺れた愛の果て」',
+    color:'#cc5555',
+    text:'お金も時間も、たかは全部使った。しのはそれでも傷ついていた。\n愛することと、自分を失うことは、違う。\n\n「助けたかった」という気持ちは本物だった。それだけは確かだ。',
+  },
+  'END_isolated': {
+    title:'孤独エンド',
+    subtitle:'「全部失った男」',
+    color:'#556688',
+    text:'ハムとの縁も切れ、Rだけの世界になった。\n最初はそれでよかった。でも何年も経つと、何かが違うと感じ始めた。\n\n「俺の友達はどこに行ったんだろう」——その問いに答えられる人は、もういなかった。',
+  },
+  'END_another': {
+    title:'明美と結婚エンド',
+    subtitle:'「静かな幸せを選んだ男」',
+    color:'#55bb77',
+    text:'舞子でも、しのでもなく。マキでも、Rでもなく。\n明美との穏やかな日々が、たかには合っていた。\n\n「波乱がない人生が、こんなに心地いいとは思わなかった」',
+  },
+  'END_new_start': {
+    title:'新スタートエンド',
+    subtitle:'「またゼロから」',
+    color:'#aaaaee',
+    text:'Rとは別れた。傷はある。でも不思議と、前より軽い気がした。\n「次は、ちゃんと自分を大切にできる相手と」と思えるようになった。\n\nたかの冒険は、まだ続いている。',
+  },
+  'END_broke': {
+    title:'経済破綻エンド',
+    subtitle:'「金がない。それだけで人生は変わる」',
+    color:'#aa8822',
+    text:'支え続けた。費やし続けた。気づいた時には財布の中身も、余裕も、全部なくなっていた。\n\n誰かのために使ったお金に後悔はない。でも、現実は厳しかった。\n家賃が払えなくなった月に、たかは初めて「自分のことを守れなかった」と思った。\n\n「もう少し、自分のことも考えればよかった」',
+  },
+  'END_sick': {
+    title:'体調崩壊エンド',
+    subtitle:'「体が先に白旗を上げた」',
+    color:'#3399bb',
+    text:'ストレス、睡眠不足、感情の消耗。気づかないうちに積み重なっていた。\n\nある朝、起き上がれなかった。\n会社に電話して、そのまま病院へ行った。医者には「過労と自律神経の乱れ」と言われた。\n\n「もっと早く休めばよかった」——でも、今からでも遅くはない。',
+  },
+  'END_death': {
+    title:'デスエンド',
+    subtitle:'「帰らない夜」',
+    color:'#1a1a2e',
+    text:'たかは、川のそばに立ったまま動かなかった。\n\nハムのメッセージには、返信しなかった。\n\n翌朝、ハムが何十回も電話をかけた。\n繋がることは、なかった。\n\n本当のことは、わからない。\nでも、あの夜——たかが「助けて」と言えていたら。\n\nもし誰かが、声をかけてくれていたら。\n\n\n——もう一度、選び直してください。',
+  },
+  'END_shino_new_life': {
+    title:'しの・再出発エンド',
+    subtitle:'「予定外の、新しい物語」',
+    color:'#cc8844',
+    text:'子どもが生まれた。\n\nたかは、Rのことも、マッチングアプリのことも、全部捨てた。\nしのと二人で、同じ方向を向いて歩いた。\n\n計画した人生ではなかった。\nでも——しのの笑顔を見るたびに、これでよかったと思えた。\n\n「あのメッセージに返信して、よかった」',
+  },
+  'END_shino_chaos_two': {
+    title:'しの・逃げたエンド',
+    subtitle:'「一番最低な選択をした日」',
+    color:'#884422',
+    text:'しのがどうしたかは、わからない。\n\n連絡は来なかった。\nたかはマッチングアプリを開けなくなった。\n\nあの朝の、しのの「そっか」という言葉が、ずっと耳に残った。\n\n——逃げてはいけない人間から、逃げてしまった。',
+  },
+  'END_maiko_chaos': {
+    title:'舞子・修羅場エンド',
+    subtitle:'「正直に話した代償」',
+    color:'#aa4466',
+    text:'Rとは別れた。舞子とも、もう連絡が取れない。\n\nでも——嘘はつかなかった。\nそのことだけが、たかの中に残った。\n\n「正直であることが、正しいとは限らない」\nそれでも、たかは同じ選択をしただろうと思った。',
+  },
+  'END_maiko_lie': {
+    title:'舞子・隠蔽エンド',
+    subtitle:'「嘘の上に積み上げた生活」',
+    color:'#662244',
+    text:'Rはその後も疑い続けた。\n\nたかは嘘をつき続けた。\n気づけば二人の間には、壁だけが残っていた。\n\n「正直に言えばよかった」\nその後悔は、結婚してからも消えなかった。',
+  },
+  'END_R_stab': {
+    title:'R・入院エンド',
+    subtitle:'「面会には行かなかった」',
+    color:'#2a1a1a',
+    text:'Rからの面会申請を、たかは断った。\n\n会ってしまったら、何かが壊れる気がした。\nそれとも——もう壊れているから、会えなかったのか。\n\n病室の天井を見続けながら、たかはただ、時間が経つのを待った。\n\n「別れよう」と言ったあの夜の自分が、\nどこか遠い人のように感じた。',
+  },
+  'END_R_dead': {
+    title:'R・死亡エンド',
+    subtitle:'「声が、出なかった」',
+    color:'#0a0000',
+    text:'Rの泣き声が、遠くなっていった。\n\nたかは床の冷たさを感じながら、何も言えなかった。\n助けを呼ぶ声も、Rを呼ぶ声も——出なかった。\n\nRは長い間、その場を動けなかったという。\n\n——たかの名前を呼んでいたらしい。\nずっと、ずっと。\n\nそれを教えてくれたのは、駆けつけたハムだった。',
+  },
+  'END_R_forgive': {
+    title:'R・許しエンド',
+    subtitle:'「それでも、あなたを憎めなかった」',
+    color:'#1a1a3a',
+    text:'「全部忘れよう」\n\nたかはそう言った。本心かどうかは、自分でもわからなかった。\n\nRは泣いた。ずっと泣いた。\n\nRは執行猶予付きの判決を受けた。\nたかとは、もう会わない。\n\nでも——あの瞬間の「ありがとう」という声だけが、\nいつまでもたかの耳の中に残った。',
+  },
+  'END_R_judge': {
+    title:'R・裁判エンド',
+    subtitle:'「正しいことが、正しいとは限らない」',
+    color:'#1a0a2a',
+    text:'たかは証言台に立った。\n\n法廷でRを見た。\nRは一度も、たかを見なかった。\n\n判決は実刑だった。\n\nたかは帰り道、何も感じなかった。\n怒りも、悲しみも、解放感も——何もなかった。\n\n「これでよかったのか」\n\nその問いに答えられる日が来るかどうか、\nたかにはまだわからなかった。',
+  },
+  'END_aki_new': {
+    title:'アキ・新しい関係エンド',
+    subtitle:'「仕事とは違う顔を知った」',
+    color:'#cc9933',
+    text:'アキは、子どもと一緒に生きることにした。\n\nたかも、できる限りそばにいた。\nRのことを諦めたのか、と問われれば——正直わからない。\n\nでも、アキの「ありがとう」だけは、本物だった。\n\n「あの夜、断ることもできた。でも俺は——」\n\nその先は、言葉にしなかった。',
+  },
+  'END_aki_chaos': {
+    title:'アキ・無責任エンド',
+    subtitle:'「逃げた男の末路」',
+    color:'#665522',
+    text:'アキは一人で産んだ。\n\nたかはその後、Rとの関係も崩れた。\n何かが少しずつ、ほつれていく感覚があった。\n\n「俺はどこで間違えたんだろう」\n\nその問いに答えられるほど、たかはまだ、自分を見つめられていなかった。',
+  },
+  'END_maki_death_end': {
+    title:'マキ・魂を落とすエンド',
+    subtitle:'「幸せになってね、という言葉の重さ」',
+    color:'#221133',
+    text:'Rとは、静かに別れた。\n\nマキのことを、たかは誰にも話さなかった。\nただ、命日には花を持って行った。\n\n「あの夜、帰ればよかった」\n\nそれだけが、答えだった。\n\n——人の心の傷を、軽く見てはいけなかった。',
+  },
+  'END_solo': {
+    title:'独身エンド',
+    subtitle:'「自分だけの人生を、選んだ男の話」',
+    color:'#4a7a8a',
+    text:'たかは、誰とも付き合わなかった。\n結婚もしなかった。\n\n傷つくのが怖かったわけじゃない。\nただ——誰かに合わせるより、自分のペースで生きることを選んだ。\n\n趣味があった。仕事があった。ハムがいた。\nそれで十分だと、気づいた日があった。\n\n「孤独と、ひとりは違う」\n\nたかはそう、静かに笑った。',
+  },
+
+  // ===== 明美アーク エンディング =====
+  'END_akemi_marry': {
+    title:'明美・結婚エンド',
+    subtitle:'「穏やかな幸せは、こういう形をしていた」',
+    color:'#6aaa88',
+    text:'たかと明美は結婚した。\n\n式は小さかった。でも——笑顔だけは、どんな式場にも負けなかった。\n\nしののことも、舞子のことも、遠い昔の話になっていた。\nそれを思い出しても、もう痛くなかった。\n\n「あの頃があったから、今がある」\n\nそう思える日が来たことが、たかには一番の奇跡だった。',
+  },
+  'END_akemi_apart': {
+    title:'明美・遠距離エンド',
+    subtitle:'「距離が、全部を変えた」',
+    color:'#667799',
+    text:'明美は海外転勤になった。\n\n「一緒に来てほしい」とは言えなかった。\n「待っている」とも言えなかった。\n\n空港で別れた。明美は振り向かなかった。\nたかも、見送った後すぐに歩き出した。\n\n指輪は、引き出しの奥に入れた。\n捨てられなかった。\nそれだけが、たかに残った全てだった。',
+  },
+  'END_akemi_late': {
+    title:'明美・遅れた決断エンド',
+    subtitle:'「間に合った——ギリギリだったけど」',
+    color:'#88aa66',
+    text:'明美は泣いた。\n「やっと言ってくれた」と。\n\nプロポーズは、レストランでも夜景の前でもなかった。\n公園のベンチで、たかがぼそっと言っただけだった。\n\nでも——明美は「うん」と言ってくれた。\n\n「もっと早く言えばよかった」\nそれは後悔じゃなくて、少しだけ照れくさいだけだった。',
+  },
+  'END_akemi_drift': {
+    title:'明美・自然消滅エンド',
+    subtitle:'「さよならを言わないまま、終わった」',
+    color:'#556677',
+    text:'いつの間にか、連絡が途絶えていた。\n\nどちらかが悪いわけじゃない。\nただ——二人の時間が、少しずつすれ違っていった。\n\n最後にLINEを送ったのがいつか、たかはもう覚えていない。\n\n「ちゃんと別れを言えばよかった」\n\nでも、それができなかったことも、たかの一部だった。',
+  },
+  'END_akemi_choose': {
+    title:'明美・選んだエンド',
+    subtitle:'「仕事より、あなたを選んだ」',
+    color:'#7788aa',
+    text:'たかは仕事を切り上げた。\n\n明美は、待っていた。\n別れを切り出そうとしていた——でも、たかが来た。\n\n「来てくれると思ってなかった」\n明美の声が、少し震えていた。\n\nその夜二人は長い時間、話した。\n何を話したかはもう覚えていないけれど——\nその夜を境に、二人の関係は変わった。深くなった。',
+  },
+  'END_akemi_work_over': {
+    title:'明美・仕事優先エンド',
+    subtitle:'「週末でいい、が最後の言葉になった」',
+    color:'#554433',
+    text:'週末、明美からLINEが来なかった。\n\n返信を待っていたが、来なかった。\n電話をかけると、「もうやめよう」と言われた。\n\n「たかさんには仕事がある。私にも生活がある。合わなかっただけだよ」\n\n怒っていなかった。それが一番つらかった。\n\n昇格の通知が来た日の夜、たかは一人でビールを飲んだ。\n美味しくなかった。',
+  },
+
+  // ===== 舞子修復エンド =====
+  'END_maiko_renewal': {
+    title:'舞子・修復エンド',
+    subtitle:'「壊れた後にできる、もっと強い形」',
+    color:'#aa8855',
+    text:'舞子とはやり直した。\n\n簡単ではなかった。\n信頼を取り戻すのに、一年以上かかった。\n\nでも——あの頃と比べて、二人は確かに変わった。\nお互いの弱さを見た上で、それでも一緒にいることを選んでいた。\n\n「こんな形の夫婦もあるんだな」\n\nたかはそう思いながら、舞子の作ったご飯を食べた。',
+  },
+
+  // ===== 旅アーク エンディング =====
+  'END_journey_new': {
+    title:'旅先・出会いエンド',
+    subtitle:'「知らない土地で、知らない自分に出会った」',
+    color:'#558877',
+    text:'旅先で出会った彼女とは、その後も連絡を続けた。\n\n「東京に来るなら、連絡して」\n彼女はそう言ってくれた。\n\nたかは、しばらくして東京に戻った。\n傷は癒えていなかった。でも——\n次の一歩を踏み出せる気がしていた。\n\n「人生って、まだわからないな」\n\nその言葉が、久しぶりにポジティブな意味で口から出た。',
+  },
+  'END_journey_reset': {
+    title:'旅・リセットエンド',
+    subtitle:'「ゼロに戻ることが、再起の第一歩だった」',
+    color:'#446655',
+    text:'たかは東京に帰った。\n\n何も解決していなかった。でも——何かが軽くなっていた。\n\n離婚のこと、舞子のこと、しののこと。\n全部、ひとつひとつ置いてきた気がした。\n\nアパートの鍵を開けた時、部屋が前より広く感じた。\n\n「また始めよう」\n\nそう思えたこと自体が、この旅の答えだった。',
+  },
+
+  // ===== 狂気ルート エンディング =====
+  'END_insane': {
+    title:'狂気エンド',
+    subtitle:'〜 もう、戻れない夜 〜',
+    color:'#2a1a3a',
+    text:'たかは静かになった。\n\n怒鳴りもしない。泣きもしない。笑いもしない。\nただ、何かが抜け落ちた顔で、毎日をやり過ごした。\n\n「大丈夫ですか」と言われるたびに、「大丈夫です」と答えた。\n\n誰も、本当のことを知らなかった。\n本人でさえ、何が壊れたのかわからなかった。\n\n——ある朝、たかは起き上がれなかった。\n\n床を見つめながら、ぼんやりと思った。\n「こうなるまで、気づかなかった。」\n\nこのゲームは何度でもやり直せる。\n一人で抱え込まないで。',
+  },
+  'END_violent': {
+    title:'暴力逮捕エンド',
+    subtitle:'〜 取り返しのつかない夜 〜',
+    color:'#3a0808',
+    text:'翌朝のニュースには出なかった。\nでも、職場には知れ渡った。\n\n高橋課長は入院した。たかは警察で事情を聴取された。\n\n「どうしてこんなことを？」\n\nたかは答えられなかった。\n理由はわかってる。でもうまく言葉にならなかった。\n\n仕事を失った。裁判になった。\n\n——あの夜、もし誰かに話せていたら。\nもし、一人で抱えなかったら。\n\nこのゲームは何度でもやり直せる。\n怒りは、誰かに話すことで少しだけ軽くなる。',
+  },
+
+  // ===== セフレルート エンディング =====
+  'END_sefure': {
+    title:'セフレ継続エンド',
+    subtitle:'〜 名前のない関係のまま 〜',
+    color:'#5a2a5a',
+    text:'たかと舞子の関係は、続いた。\n\n「元夫婦」でも「恋人」でもない、名前のついていない何か。\n\n会うたびに温かくて、別れるたびに空っぽになった。\nそれが何年も続いた。\n\n「他に誰かを好きになれない」と舞子は言った。\n「俺もそうだ」とたかは思った。\n\nでも、それを言葉にすることは、二人ともしなかった。\n\n——もしかしたらこれが、二人なりの答えだったのかもしれない。',
+  },
+
+  // ===== しのストーカールート エンディング =====
+  'END_nohamu_solo': {
+    title:'一人で生きる',
+    subtitle:'「友達がいなくても、俺は俺だ」',
+    color:'#445566',
+    text:'たかは結婚も、深い友情も、持たなかった。\n\nそれが寂しいかと言えば——正直、少しは寂しい。\n\nでも、一人でいることと、孤独であることは、違う。\n\nたかはそれを、体で覚えた。\n\n趣味があった。仕事があった。それだけで、意外と生きていけた。\n\n「ハムと仲良くなっていたら、俺は違う人間になっていたかもしれない」\n\nそう思うことはある。でも——今の自分も、そんなに悪くない。',
+  },
+  'END_nohamu_recover': {
+    title:'孤独の底から',
+    subtitle:'「誰でもよかった。でも、それがよかった」',
+    color:'#336655',
+    text:'会ったこともない心療内科の先生に、たかは全部話した。\n\n泣きながら話した。みっともないとは思わなかった。それだけ追い詰められていた。\n\n「あなたは十分頑張っていた」という言葉が、何故か一番刺さった。\n\n頼れる人間が最初からいれば、こうはならなかったかもしれない。\nでも——底まで落ちたから、初めて手を伸ばせた。\n\nたかはそう、静かに思った。',
+  },
+  'END_nohamu_collapse': {
+    title:'自暴自棄エンド',
+    subtitle:'「誰にも言えなかった男」',
+    color:'#2a2a2a',
+    text:'たかがその後どうなったか、知っている人はいなかった。\n\n離婚から半年後、アパートの更新を断って実家に帰ったという話だけが、かつての職場に伝わってきた。\n\n「あいつ、最近どうしてる？」\nそう聞ける相手が、一人もいなかった。\n\nそれが——一番こたえた。\n\n——もう一度、選び直してください。',
+  },
+  'END_shino_stalker_resolve': {
+    title:'過去との和解エンド',
+    subtitle:'〜 あの夜があったから 〜',
+    color:'#2a4a3a',
+    text:'たかはスマホで、しのに相談窓口のリンクを送った。\n\n返信は来なかった。\nでも、一週間後に短いメッセージが届いた。\n\n「行ってきたよ。話せた。ありがとう。元気でね」\n\nそれきりだった。\n\nたかは舞子との生活に戻った。傷はある。信頼もまだ壊れかけている。\nでも——しのを突き放さなかった夜のことを、悔やんではいなかった。\n\n人を傷つけたことも、傷つけられたことも、全部ひっくるめて。\nたかはそれを、やっと「過去」と呼べるようになった。',
+  },
+  'END_shino_stalker_end': {
+    title:'泥沼エンド',
+    subtitle:'〜 抜け出せない夜 〜',
+    color:'#1a1a2a',
+    text:'たかはしのの部屋に行った。\n\n舞子に連絡はしなかった。\n何も考えたくなかった。\n\nしのは何も言わなかった。たかも何も言わなかった。\n\n翌朝、帰り際にしのが呟いた。\n「また来てくれる？」\n\nたかは答えなかった。\nでも——また来てしまうのだろうと、自分でもわかっていた。\n\n舞子との関係は静かに壊れていった。\nしのとの関係は、名前もないまま続いた。\n\n誰も幸せにしていない。自分も含めて。\n\nこのゲームは何度でもやり直せる。',
+  },
+
+  // ===== アキ本気エンディング =====
+  'END_aki_real': {
+    title:'アキとの本物エンド',
+    subtitle:'〜 仕事を越えた先に 〜',
+    color:'#e08080',
+    text:'アキは仕事を辞めた。\n\n「自分でも驚いてる」と笑った。\n\n最初は「お客さん」だった。\n次第に「話せる人」になって、気づいたら「離れたくない人」になっていた。\n\nたかはアキと、静かな場所で一緒に暮らし始めた。\n\n派手ではない。波瀾万丈でもない。\nでも——朝、隣に誰かがいることが、こんなに安心するものだと初めて知った。\n\n「あなたに会えてよかった」\nアキがそう言った夜、たかは泣きそうになった。',
+  },
+};
+
+const TOTAL_ENDINGS = Object.keys(ENDINGS).length;
+
+// ===== ゲームエンジン =====
+let stats = {yuuki:50,okane:50,kenkou:50,jinmyaku:50};
+let currentId  = 's1';
+let textIndex  = 0;
+let isTyping   = false;
+let skipFlag   = false;
+let awaitAdv   = false;
+let isSkipping = false;
+let skipTimerId = null;
+
+// ===== 突発フラグ管理 =====
+function getFlags(){ const r=localStorage.getItem('takano_flags'); return r?JSON.parse(r):{}; }
+function setFlag(name){ const f=getFlags(); f[name]=true; localStorage.setItem('takano_flags',JSON.stringify(f)); }
+function hasFlag(name){ return !!getFlags()[name]; }
+
+// どのシーンを通過したらフラグを立てるか
+const FLAG_TRIGGERS = {
+  's1_hamu_close':       'hamu_close',
+  's2_shino':            'met_shino',
+  's3_support':          'met_shino',
+  's6_marry':            'met_maiko',
+  's7_affair':           'met_maiko',
+  's10_aki_deep':        'met_aki',
+  's_bye_maki':          'left_maki',
+  's10_maki_s':          'left_maki',
+  's_bye_shino_arrest':  'shino_abandoned',
+  's_bye_shino_support': 'shino_abandoned',
+};
+
+// ステータスが低すぎる場合に強制ルートへ誘導（意図せず選択パターンが積み重なると発動）
+const FORCED_ROUTES = [
+  // 独身ルート：出会い・結婚シーンで勇気＋人脈が低いと踏み込めない
+  { at:'s5_another', cond: s => s.yuuki < 25 && s.jinmyaku < 25, to:'s5_no_love' },
+  { at:'s6_marry',   cond: s => s.yuuki < 30,                    to:'s5_solo_time' },
+  // 死亡ルート：中盤以降、健康が限界を超えると死へ
+  { at:'s11_R',        cond: s => s.kenkou < 20 || s.yuuki < 15, to:'END_death' },
+  { at:'s12_control',  cond: s => s.kenkou < 15,                 to:'END_death' },
+  // ハムと仲良くなっていない場合はハム登場なし版へ
+  { at:'s8_divorce', cond: () => !hasFlag('hamu_close'), to:'s8_divorce_nohamu' },
+];
+
+// どのシーンで誰が割り込むか（フラグが立っていれば1回だけ発動）
+const INTERRUPTS = {
+  's10_maki_intro': {flag:'met_shino',      scene:'int_shino'},
+  's11_R':          {flag:'met_maiko',      scene:'int_maiko'},
+  's12_control':    {flag:'met_aki',        scene:'int_aki'},
+  's14_marry_R':    {flag:'left_maki',      scene:'int_maki'},
+  's7_forgive':     {flag:'shino_abandoned',scene:'int_shino_stalker'},
+};
+
+function clamp(v){ return Math.max(0,Math.min(100,v)); }
+
+function updateStatUI(){
+  ['yuuki','okane','kenkou','jinmyaku'].forEach(k=>{
+    const v = stats[k];
+    document.getElementById('bar-'+k).style.width = v+'%';
+    document.getElementById('num-'+k).textContent = v;
+  });
+}
+
+function saveGame(){
+  localStorage.setItem('takano_save', JSON.stringify({stats, id:currentId, ti:textIndex}));
+}
+function loadSave(){ const r=localStorage.getItem('takano_save'); return r?JSON.parse(r):null; }
+
+function recordEnding(key){
+  const raw = localStorage.getItem('takano_endings')||'{}';
+  const obj = JSON.parse(raw);
+  obj[key] = true;
+  localStorage.setItem('takano_endings', JSON.stringify(obj));
+}
+function countEndings(){
+  const raw = localStorage.getItem('takano_endings')||'{}';
+  return Object.keys(JSON.parse(raw)).length;
+}
+
+function showEffects(effects, targetEl){
+  const labels={yuuki:'勇気',okane:'お金',kenkou:'健康',jinmyaku:'人脈'};
+  const colors ={yuuki:'#e05070',okane:'#50b060',kenkou:'#5090d0',jinmyaku:'#b050d0'};
+  let delay=0;
+  Object.entries(effects).forEach(([k,v])=>{
+    if(v===0) return;
+    const el = document.createElement('div');
+    el.className='effect-popup';
+    el.textContent = labels[k]+(v>0?` +${v}`:` ${v}`);
+    el.style.color = colors[k];
+    const rect = targetEl.getBoundingClientRect();
+    el.style.left=(rect.left+Math.random()*rect.width*0.5+rect.width*0.2)+'px';
+    el.style.top =(rect.top +Math.random()*40+10)+'px';
+    el.style.animationDelay=delay+'ms';
+    document.body.appendChild(el);
+    setTimeout(()=>el.remove(),1600+delay);
+    delay+=160;
+  });
+}
+
+function typeText(text, onDone){
+  const el=document.getElementById('text-content');
+  const cursor=document.getElementById('text-cursor');
+  el.textContent=''; cursor.style.display='inline-block';
+  isTyping=true; skipFlag=false;
+  let i=0;
+  function step(){
+    if(skipFlag){ el.textContent=text; isTyping=false; cursor.style.display='none'; onDone&&onDone(); return; }
+    if(i<text.length){ el.textContent+=text[i++]; setTimeout(step,35); }
+    else{ isTyping=false; cursor.style.display='none'; onDone&&onDone(); }
+  }
+  step();
+}
+
+function handleNext(nx){
+  if(!nx) return;
+  if(nx.startsWith('END_')){ showEnding(nx); }
+  else{ showScene(nx); }
+}
+
+function showScene(id){
+  // 強制ルートチェック（ステータス不足で特定シーンへ誘導）
+  for(const fr of FORCED_ROUTES){
+    if(fr.at === id && fr.cond(stats)){
+      id = fr.to;
+      break;
+    }
+  }
+  if(id.startsWith('END_')){ showEnding(id); return; }
+
+  // フラグ記録
+  if(FLAG_TRIGGERS[id]) setFlag(FLAG_TRIGGERS[id]);
+
+  // 突発フラグ割り込みチェック（1プレイで1回だけ）
+  const intr = INTERRUPTS[id];
+  if(intr && hasFlag(intr.flag) && !hasFlag('int_done_'+id)){
+    setFlag('int_done_'+id);
+    id = intr.scene;
+  }
+
+  currentId = id;
+  textIndex = 0;
+  awaitAdv  = false;
+  recordChapter(id);
+  const scene = SCENES[id];
+  document.getElementById('choices-area').style.display='none';
+  document.getElementById('choices-area').innerHTML='';
+  document.getElementById('tap-hint').style.display='block';
+  document.getElementById('tap-hint').textContent='タップして次へ ▼';
+  showNextText();
+}
+
+function showNextText(){
+  const scene = SCENES[currentId];
+  if(textIndex >= scene.texts.length){
+    document.getElementById('tap-hint').style.display='none';
+    if(scene.choices && scene.choices.length>0){
+      isSkipping = false;
+      document.getElementById('skip-btn').classList.remove('active');
+      showChoices(scene.choices);
+    } else if(scene.nx){
+      if(isSkipping){
+        handleNext(scene.nx);
+      } else {
+        document.getElementById('tap-hint').style.display='block';
+        document.getElementById('tap-hint').textContent='タップして続ける ▼';
+        awaitAdv = true;
+      }
+    }
+    return;
+  }
+  awaitAdv = false;
+  const item = scene.texts[textIndex];
+  document.getElementById('speaker-name').textContent = item.sp||'';
+  updateVisuals(currentId, item.sp);
+  if(isSkipping){
+    document.getElementById('text-content').textContent = item.tx;
+    document.getElementById('text-cursor').style.display='none';
+    isTyping = false; skipFlag = false;
+    textIndex++; saveGame();
+    skipTimerId = setTimeout(showNextText, 60);
+  } else {
+    typeText(item.tx, ()=>{
+      textIndex++; saveGame();
+      if(isSkipping){ skipTimerId = setTimeout(showNextText, 60); }
+    });
+  }
+}
+
+function showChoices(choices){
+  const area=document.getElementById('choices-area');
+  area.innerHTML=''; area.style.display='flex';
+  choices.forEach(c=>{
+    const btn=document.createElement('button');
+    btn.className='choice-btn'; btn.textContent=c.tx;
+    btn.addEventListener('click',()=>{
+      area.style.display='none';
+      Object.entries(c.ef).forEach(([k,v])=>{ stats[k]=clamp(stats[k]+v); });
+      updateStatUI();
+      showEffects(c.ef, btn);
+      setTimeout(()=>handleNext(c.nx), 300);
+    });
+    area.appendChild(btn);
+  });
+}
+
+// 固有ストーリーエンド（ステータス強制上書きの対象外）
+const STORY_ENDINGS = new Set([
+  'END_death','END_solo',
+  'END_shino','END_maki',
+  'END_shino_new_life','END_shino_chaos_two',
+  'END_maiko_chaos','END_maiko_lie','END_maiko_renewal',
+  'END_R_stab','END_R_dead','END_R_forgive','END_R_judge',
+  'END_aki_new','END_aki_chaos','END_aki_real',
+  'END_maki_death_end',
+  'END_akemi_marry','END_akemi_apart','END_akemi_late',
+  'END_akemi_drift','END_akemi_choose','END_akemi_work_over',
+  'END_journey_new','END_journey_reset',
+  'END_insane','END_violent','END_sefure',
+  'END_shino_stalker_resolve','END_shino_stalker_end',
+  'END_nohamu_recover','END_nohamu_collapse','END_nohamu_solo',
+]);
+
+function showEnding(key){
+  isSkipping = false;
+  document.getElementById('skip-btn').classList.remove('active');
+  // ステータスによる強制上書き（固有ストーリーエンドは除外）
+  if(!STORY_ENDINGS.has(key)){
+    if(stats.kenkou < 20 && key !== 'END_sick')       key = 'END_sick';
+    else if(stats.okane < 10 && key !== 'END_broke')  key = 'END_broke';
+  }
+  recordEnding(key);
+  localStorage.removeItem('takano_save');
+  const end = ENDINGS[key];
+  document.getElementById('game-screen').style.display='none';
+  const es = document.getElementById('ending-screen');
+  es.style.display='flex';
+  document.getElementById('ending-title').textContent    = end.title;
+  document.getElementById('ending-title').style.color    = end.color;
+  document.getElementById('ending-subtitle').textContent = end.subtitle;
+  document.getElementById('ending-text').textContent     = end.text;
+  document.getElementById('es-yuuki').textContent    = stats.yuuki;
+  document.getElementById('es-okane').textContent    = stats.okane;
+  document.getElementById('es-kenkou').textContent   = stats.kenkou;
+  document.getElementById('es-jinmyaku').textContent = stats.jinmyaku;
+}
+
+function startGame(fromSave){
+  document.getElementById('title-screen').style.display='none';
+  const gs=document.getElementById('game-screen');
+  gs.style.display='flex';
+  if(fromSave){
+    const data=loadSave();
+    stats=data.stats; currentId=data.id; textIndex=0;
+    updateStatUI(); showScene(currentId);
+  } else {
+    stats={yuuki:50,okane:50,kenkou:50,jinmyaku:50};
+    updateStatUI(); showScene('s1_hamu');
+  }
+  initGameClickListener();
+}
+
+// タイトルに解放エンディング数表示
+(function(){
+  const n=countEndings();
+  if(n>0){
+    document.getElementById('title-endings-count').textContent=`解放エンディング ${n} / ${TOTAL_ENDINGS}`;
+  }
+})();
+
+document.getElementById('btn-new').addEventListener('click',()=>startGame(false));
+document.getElementById('btn-continue').addEventListener('click',()=>{
+  if(loadSave()) startGame(true);
+});
+document.getElementById('btn-retry').addEventListener('click',()=>{
+  document.getElementById('ending-screen').style.display='none';
+  startGame(false);
+});
+document.getElementById('btn-title').addEventListener('click',()=>{
+  document.getElementById('ending-screen').style.display='none';
+  const ts=document.getElementById('title-screen');
+  ts.style.display='flex';
+  const n=countEndings();
+  if(n>0) document.getElementById('title-endings-count').textContent=`解放エンディング ${n} / ${TOTAL_ENDINGS}`;
+  if(!loadSave()) document.getElementById('btn-continue').disabled=true;
+  else document.getElementById('btn-continue').disabled=false;
+  document.getElementById('btn-chapter').disabled = !Object.keys(getChapters()).length;
+  renderTrophies();
+});
+(function(){
+  if(!loadSave()) document.getElementById('btn-continue').disabled=true;
+})();
+
+// ===== セーブスロット =====
+function getSlot(n){
+  const r=localStorage.getItem('takano_slot_'+n);
+  return r?JSON.parse(r):null;
+}
+function saveToSlot(n){
+  const scene=SCENES[currentId];
+  const dt=new Date();
+  const ts=`${dt.getMonth()+1}/${dt.getDate()} ${dt.getHours()}:${String(dt.getMinutes()).padStart(2,'0')}`;
+  localStorage.setItem('takano_slot_'+n,JSON.stringify({
+    stats:{...stats},id:currentId,
+    sceneNum:(scene&&scene.num)||'?',
+    sceneTitle:(scene&&scene.title)||'',
+    ts
+  }));
+  closeModal('modal-save');
+  showToast('スロット'+(n+1)+'にセーブしました');
+}
+function loadFromSlot(n){
+  const d=getSlot(n);if(!d)return;
+  stats={...d.stats};currentId=d.id;textIndex=0;
+  updateStatUI();
+  document.getElementById('title-screen').style.display='none';
+  document.getElementById('ending-screen').style.display='none';
+  document.getElementById('game-screen').style.display='flex';
+  closeModal('modal-save');
+  initGameClickListener();
+  showScene(currentId);
+}
+function deleteSlot(n){
+  localStorage.removeItem('takano_slot_'+n);
+  renderSaveModal(currentSaveMode);
+}
+
+// ===== チャプター記録 =====
+function recordChapter(id){
+  const scene=SCENES[id];
+  if(!scene||!scene.title)return;
+  const raw=localStorage.getItem('takano_chapters')||'{}';
+  const obj=JSON.parse(raw);
+  if(!obj[id]){
+    obj[id]={title:scene.title,num:scene.num,stats:{...stats}};
+    localStorage.setItem('takano_chapters',JSON.stringify(obj));
+  }
+}
+function getChapters(){
+  return JSON.parse(localStorage.getItem('takano_chapters')||'{}');
+}
+
+// ===== モーダル =====
+let currentSaveMode='save';
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+function renderSaveModal(mode){
+  currentSaveMode=mode;
+  document.getElementById('modal-save-title').textContent=mode==='save'?'セーブ':'ロード';
+  const body=document.getElementById('modal-save-body');
+  body.innerHTML='';
+  for(let n=0;n<3;n++){
+    const d=getSlot(n);
+    const slot=document.createElement('div');slot.className='save-slot';
+    const info=document.createElement('div');info.className='slot-info';
+    const nm=document.createElement('div');nm.className='slot-name';
+    nm.textContent='スロット '+(n+1);
+    const det=document.createElement('div');det.className='slot-detail'+(d?' has':'');
+    if(d) det.innerHTML=`Scene ${d.sceneNum}：${d.sceneTitle||'—'}<br>${d.ts}`;
+    else  det.textContent='（データなし）';
+    info.appendChild(nm);info.appendChild(det);
+    const btns=document.createElement('div');btns.className='slot-btns';
+    if(mode==='save'){
+      const sb=document.createElement('button');sb.className='slot-btn';sb.textContent='セーブ';
+      sb.addEventListener('click',()=>saveToSlot(n));btns.appendChild(sb);
+      if(d){
+        const db=document.createElement('button');db.className='slot-btn del';db.textContent='削除';
+        db.addEventListener('click',()=>deleteSlot(n));btns.appendChild(db);
+      }
+    } else {
+      const lb=document.createElement('button');lb.className='slot-btn';lb.textContent='ロード';
+      if(d) lb.addEventListener('click',()=>loadFromSlot(n));
+      else  lb.disabled=true;
+      btns.appendChild(lb);
+    }
+    slot.appendChild(info);slot.appendChild(btns);
+    body.appendChild(slot);
+  }
+}
+
+function renderChapterModal(){
+  const body=document.getElementById('modal-chapter-body');
+  const chapters=getChapters();
+  const keys=Object.keys(chapters);
+  if(!keys.length){
+    body.innerHTML='<div class="modal-empty">まだ解放されたチャプターがありません</div>';
+    return;
+  }
+  body.innerHTML='';
+  keys.sort((a,b)=>(parseInt(chapters[a].num)||99)-(parseInt(chapters[b].num)||99));
+  keys.forEach(id=>{
+    const ch=chapters[id];
+    const item=document.createElement('div');item.className='chapter-item';
+    const num=document.createElement('div');num.className='ch-num';num.textContent='Scene '+ch.num;
+    const bd=document.createElement('div');bd.className='ch-body';
+    const ti=document.createElement('div');ti.className='ch-title';ti.textContent=ch.title;
+    const st=document.createElement('div');st.className='ch-stats';
+    st.textContent=`勇${ch.stats.yuuki} お${ch.stats.okane} 健${ch.stats.kenkou} 人${ch.stats.jinmyaku}`;
+    bd.appendChild(ti);bd.appendChild(st);
+    item.appendChild(num);item.appendChild(bd);
+    item.addEventListener('click',()=>{
+      stats={...ch.stats};updateStatUI();
+      document.getElementById('title-screen').style.display='none';
+      document.getElementById('ending-screen').style.display='none';
+      document.getElementById('game-screen').style.display='flex';
+      closeModal('modal-chapter');
+      initGameClickListener();
+      showScene(id);
+    });
+    body.appendChild(item);
+  });
+}
+
+// ===== トースト通知 =====
+function showToast(msg){
+  const el=document.createElement('div');
+  el.style.cssText='position:fixed;bottom:70px;right:16px;background:rgba(0,0,0,0.9);border:1px solid rgba(240,192,96,0.5);color:#f0c060;font-size:0.68rem;padding:7px 13px;z-index:500;pointer-events:none;animation:effectFloat 2s forwards;letter-spacing:0.08em;';
+  el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),2000);
+}
+
+// ===== ゲームクリックリスナー（一度だけ登録） =====
+let _clickListenerAdded=false;
+function initGameClickListener(){
+  if(_clickListenerAdded)return;
+  _clickListenerAdded=true;
+  document.getElementById('game-screen').addEventListener('click',function(e){
+    if(e.target.closest('#choices-area'))return;
+    if(e.target.closest('#game-action-bar'))return;
+    if(isSkipping){
+      isSkipping=false;skipFlag=true;
+      if(skipTimerId){clearTimeout(skipTimerId);skipTimerId=null;}
+      document.getElementById('skip-btn').classList.remove('active');
+      // fall through → 通常のタップ処理へ続行
+    }
+    if(isTyping){skipFlag=true;return;}
+    if(awaitAdv){awaitAdv=false;handleNext(SCENES[currentId].nx);return;}
+    if(document.getElementById('choices-area').style.display==='none'){showNextText();}
+  },{passive:true});
+}
+
+// ===== 新機能イベントリスナー =====
+document.getElementById('btn-chapter').addEventListener('click',()=>{
+  renderChapterModal();openModal('modal-chapter');
+});
+document.getElementById('btn-load').addEventListener('click',()=>{
+  renderSaveModal('load');openModal('modal-save');
+});
+document.getElementById('btn-save-game').addEventListener('click',()=>{
+  renderSaveModal('save');openModal('modal-save');
+});
+document.getElementById('skip-btn').addEventListener('click',()=>{
+  isSkipping=!isSkipping;
+  document.getElementById('skip-btn').classList.toggle('active',isSkipping);
+  if(isSkipping){
+    skipFlag=true;
+    // テキスト送り待ち状態なら即座に次へ進める
+    if(!isTyping && !awaitAdv && document.getElementById('choices-area').style.display==='none'){
+      showNextText();
+    }
+  } else {
+    if(skipTimerId){clearTimeout(skipTimerId);skipTimerId=null;}
+  }
+});
+document.getElementById('modal-save-x').addEventListener('click',()=>closeModal('modal-save'));
+document.getElementById('modal-chapter-x').addEventListener('click',()=>closeModal('modal-chapter'));
+document.getElementById('modal-save').addEventListener('click',function(e){if(e.target===this)closeModal('modal-save');});
+document.getElementById('modal-chapter').addEventListener('click',function(e){if(e.target===this)closeModal('modal-chapter');});
+// チャプター選択ボタン初期状態
+(function(){
+  document.getElementById('btn-chapter').disabled = !Object.keys(getChapters()).length;
+})();
+
+// ===== トロフィー =====
+const TROPHY_KANJI = {
+  'END_main':                   '縁',
+  'END_hamu_break':             '断',
+  'END_hamu_friend':            '拳',
+  'END_mako_suffer':            '許',
+  'END_maki':                   '支',
+  'END_shino':                  '溺',
+  'END_isolated':               '孤',
+  'END_another':                '穏',
+  'END_new_start':              '再',
+  'END_broke':                  '貧',
+  'END_sick':                   '病',
+  'END_death':                  '逝',
+  'END_solo':                   '独',
+  'END_shino_new_life':         '更',
+  'END_shino_chaos_two':        '狂',
+  'END_maiko_chaos':            '崩',
+  'END_maiko_lie':              '嘘',
+  'END_maiko_renewal':          '戻',
+  'END_R_stab':                 '刃',
+  'END_R_dead':                 '喪',
+  'END_R_forgive':              '赦',
+  'END_R_judge':                '裁',
+  'END_aki_new':                '芽',
+  'END_aki_chaos':              '迷',
+  'END_aki_real':               '本',
+  'END_maki_death_end':         '哀',
+  'END_akemi_marry':            '実',
+  'END_akemi_apart':            '別',
+  'END_akemi_late':             '遅',
+  'END_akemi_drift':            '漂',
+  'END_akemi_choose':           '択',
+  'END_akemi_work_over':        '燃',
+  'END_journey_new':            '旅',
+  'END_journey_reset':          '初',
+  'END_insane':                 '壊',
+  'END_violent':                '罪',
+  'END_sefure':                 '曖',
+  'END_shino_stalker_resolve':  '解',
+  'END_shino_stalker_end':      '泥',
+  'END_nohamu_solo':            '一',
+  'END_nohamu_recover':         '底',
+  'END_nohamu_collapse':        '崩',
+};
+
+function renderTrophies(){
+  const grid = document.getElementById('trophy-grid');
+  if(!grid) return;
+  const unlocked = JSON.parse(localStorage.getItem('takano_endings')||'{}');
+  const newBadges = JSON.parse(localStorage.getItem('takano_new_endings')||'{}');
+  grid.innerHTML = '';
+  Object.keys(ENDINGS).forEach(key=>{
+    const end = ENDINGS[key];
+    const isUnlocked = !!unlocked[key];
+    const div = document.createElement('div');
+    div.className = 'trophy-badge ' + (isUnlocked ? 'unlocked' : 'locked');
+    if(isUnlocked && newBadges[key]) div.classList.add('trophy-new');
+    const bar = document.createElement('div'); bar.className='t-bar';
+    if(isUnlocked) bar.style.background = end.color;
+    const kanji = document.createElement('div'); kanji.className='t-kanji';
+    kanji.textContent = TROPHY_KANJI[key]||'？';
+    if(isUnlocked) kanji.style.color = end.color;
+    const name = document.createElement('div'); name.className='t-name';
+    name.textContent = isUnlocked ? end.title : '???';
+    div.appendChild(bar); div.appendChild(kanji); div.appendChild(name);
+    if(isUnlocked){
+      div.addEventListener('mouseenter',()=>{
+        document.getElementById('trophy-tip').textContent = end.title+'　'+end.subtitle;
+      });
+      div.addEventListener('mouseleave',()=>{
+        document.getElementById('trophy-tip').textContent='';
+      });
+    }
+    grid.appendChild(div);
+  });
+  localStorage.removeItem('takano_new_endings');
+}
+
+// エンディング記録時に新着マーク
+const _origRecordEnding = recordEnding;
+recordEnding = function(key){
+  const raw = localStorage.getItem('takano_endings')||'{}';
+  const isNew = !JSON.parse(raw)[key];
+  _origRecordEnding(key);
+  if(isNew){
+    const n = JSON.parse(localStorage.getItem('takano_new_endings')||'{}');
+    n[key]=true;
+    localStorage.setItem('takano_new_endings',JSON.stringify(n));
+  }
+};
+
+// ===== 画像プリロード =====
+(function preloadAll(){
+  const files = [
+    'images/sprites/shino.png','images/sprites/maiko.png','images/sprites/maki.png',
+    'images/sprites/R.png','images/sprites/aki.png','images/sprites/hamu.png','images/sprites/akemi.png',
+    'images/props/taiho.png','images/props/menkai.png','images/props/smartphone.png',
+    'images/props/matchingapp.png','images/props/izakaya.png','images/props/konbini.png',
+    'images/props/rikon.png','images/props/uwaki.png','images/props/wedding.png',
+    'images/props/wedding_bless.png','images/props/cafe.jpg',
+    'images/portraits/shino.png','images/portraits/maiko.png','images/portraits/maki.png',
+    'images/portraits/R.png','images/portraits/aki.png','images/portraits/hamu.png','images/portraits/akemi.png',
+  ];
+  files.forEach(src=>{ const img=new Image(); img.src=src; });
+})();
+
+// ===== 初期トロフィー描画 =====
+renderTrophies();
+</script>
+</body>
+</html>
